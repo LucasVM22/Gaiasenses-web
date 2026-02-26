@@ -32,5 +32,17 @@
     "notificationUnsubscribe": "Cancelar inscrição",
     "notificationNotSuported": "Notificações não são suportadas neste navegador.",
     "notificationAlert": "Por favor, selecione a frequência desejada"
+    ,
+    "notificationName": "Nome",
+    "notificationNamePlaceholder": "Digite seu nome",
+    "notificationEmail": "Email",
+    "notificationEmailPlaceholder": "Digite seu email",
+    "notificationFrequency": "Frequência",
+    "notificationSubscribing": "Inscrevendo...",
+    "notificationErrorName": "Nome é obrigatório",
+    "notificationErrorEmail": "Email é obrigatório",
+    "notificationErrorEmailInvalid": "Formato de email inválido",
+    "notificationErrorFrequency": "Por favor, selecione a frequência",
+    "notificationErrorSubscribe": "Falha ao inscrever. Por favor, tente novamente."
   }
 }

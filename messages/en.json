@@ -32,5 +32,17 @@
     "notificationUnsubscribe": "Unsubscribe",
     "notificationNotSuported": "Push notifications are not supported in this browser.",
     "notificationAlert": "Please, select the frequency"
+    ,
+    "notificationName": "Name",
+    "notificationNamePlaceholder": "Enter your name",
+    "notificationEmail": "Email",
+    "notificationEmailPlaceholder": "Enter your email",
+    "notificationFrequency": "Frequency",
+    "notificationSubscribing": "Subscribing...",
+    "notificationErrorName": "Name is required",
+    "notificationErrorEmail": "Email is required",
+    "notificationErrorEmailInvalid": "Invalid email format",
+    "notificationErrorFrequency": "Please select a frequency",
+    "notificationErrorSubscribe": "Failed to subscribe. Please try again."
   }
 }

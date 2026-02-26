@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { isValidEmail, subscribeUser, unsubscribeUser } from '@/lib/notifications.js';
-// import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { DropdownMenu,
 	DropdownMenuTrigger,
 	DropdownMenuContent,
@@ -9,14 +9,15 @@ import { DropdownMenu,
 import { Button } from '@/components/ui/button';
 import { useTranslations } from 'next-intl';
 
-// as linhas comentadas contém futura implementação de nome e e-mail
 export default function PushNotificationManager() {
 	const [isSupported, setIsSupported] = useState(false);
 	const [subscription, setSubscription] = useState<PushSubscription | null>(null);
-	// const nameRef = useRef<HTMLInputElement>(null);
-	// const emailRef = useRef<HTMLInputElement>(null);
+	const [name, setName] = useState('');
+	const [email, setEmail] = useState('');
 	const [frequency, setFrequency] = useState('');
-	const t = useTranslations("Notification");
+	const [errors, setErrors] = useState<{ name?: string; email?: string; frequency?: string }>({});
+	const [isLoading, setIsLoading] = useState(false);
+	const t = useTranslations("Notification"); 
 
 	function urlBase64ToUint8Array(base64String: string) {
 		const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -48,66 +49,90 @@ export default function PushNotificationManager() {
 	}
  
 	async function subscribeToPush() {
-		// const name = nameRef.current?.value;
-		// const email = emailRef.current?.value;
-		// const validEmail = await isValidEmail(email);
+		// Reset errors
+		setErrors({});
 
-		// if (!name || !email || !frequency) {
-		// 	alert('Please, fill up all the fields')
-		// 	return;
-		// }
+		// Validação básica
+		const newErrors: { name?: string; email?: string; frequency?: string } = {};
 
-		// if (!validEmail) {
-		// 	alert('Please, insert a valid email')
-		// 	return;
-		// }
+		if (!name.trim()) {
+			newErrors.name = t("notificationErrorName") || "Name is required";
+		}
+
+		if (!email.trim()) {
+			newErrors.email = t("notificationErrorEmail") || "Email is required";
+		} else if (!await isValidEmail(email)) {
+			newErrors.email = t("notificationErrorEmailInvalid") || "Invalid email format";
+		}
 
 		if (!frequency) {
-			alert(t("notificationAlert"));
+			newErrors.frequency = t("notificationErrorFrequency") || "Please select a frequency";
+		}
+
+		if (Object.keys(newErrors).length > 0) {
+			setErrors(newErrors);
 			return;
 		}
 
-		const registration = await navigator.serviceWorker.ready;
-		const sub = await registration.pushManager.subscribe({
-			userVisibleOnly: true,
-			applicationServerKey: urlBase64ToUint8Array(
-				process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
-			)
-		});
-		setSubscription(sub);
-		const serializedSub = JSON.parse(JSON.stringify(sub));
+		setIsLoading(true);
+		try {
+			const registration = await navigator.serviceWorker.ready;
+			const sub = await registration.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: urlBase64ToUint8Array(
+					process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+				)
+			});
+			setSubscription(sub);
+			const serializedSub = JSON.parse(JSON.stringify(sub));
 
-		let first_push = new Date();
-		let formatFreq = "";
-		switch (frequency) {
-			case 'Daily':
-			case 'Diária':
-				first_push.setDate(first_push.getDate() + 1);
-				formatFreq = 'Daily';
-				break;
+			let first_push = new Date();
+			let formatFreq = "";
+			
+			switch (frequency) {
+				/*
+				case 'Notification.notification60secTest':
+					first_push.setUTCMinutes(first_push.getUTCMinutes() + 1);
+					formatFreq = '60secondTest';
+					break;
+				*/
+				case 'Daily':
+				case 'Diária':
+					first_push.setUTCDate(first_push.getUTCDate() + 1);
+					formatFreq = 'Daily';
+					break;
 
-			case 'Weekly':
-			case 'Semanal':			
-				first_push.setDate(first_push.getDate() + 7);
-				formatFreq = 'Weekly';
-				break;
+				case 'Weekly':
+				case 'Semanal':			
+					first_push.setUTCDate(first_push.getUTCDate() + 7);
+					formatFreq = 'Weekly';
+					break;
 
-			case 'Monthly':
-			case 'Mensal':
-				first_push.setMonth(first_push.getMonth() + 1);
-				formatFreq = 'Monthly';
-				break;
-		
-			default:
-				break;
+				case 'Monthly':
+				case 'Mensal':
+					first_push.setUTCMonth(first_push.getUTCMonth() + 1);
+					formatFreq = 'Monthly';
+					break;
+			
+				default:
+					break;
+			}
+
+			await subscribeUser({name, email, freq: formatFreq, first_push, sub: serializedSub});
+
+			// Clear form on success
+			setName('');
+			setEmail('');
+			setFrequency('');
+			setErrors({});
+		} catch (error) {
+			console.error('Error subscribing to push notifications:', error);
+			setErrors({ 
+				frequency: t("notificationErrorSubscribe") || "Failed to subscribe. Please try again."
+			});
+		} finally {
+			setIsLoading(false);
 		}
-
-		// await subscribeUser({name, email, freq: frequency, first_push, sub: serializedSub});
-		await subscribeUser({freq: formatFreq, first_push, sub: serializedSub});
-
-		// if (nameRef.current) nameRef.current.value = '';
-		// if (emailRef.current) emailRef.current.value = '';
-		if (frequency) setFrequency('');
 	}
  
 	async function unsubscribeFromPush() {
@@ -138,23 +163,93 @@ export default function PushNotificationManager() {
 				{subscription ? (
 					<Button variant='destructive' className='w-full' onClick={unsubscribeFromPush}>{t("notificationUnsubscribe")}</Button>
 				) : (
-					<>
-						<div className='space-y-2'>
+					<div className='space-y-4'>
+						{/* Campo de Nome */}
+						<div className='space-y-1'>
+							<label htmlFor="name" className='text-sm font-medium'>
+								{t("notificationName") || "Name"}
+							</label>
+							<Input
+								id="name"
+								type="text"
+								placeholder={t("notificationNamePlaceholder") || "Enter your name"}
+								value={name}
+								onChange={(e) => {
+									setName(e.target.value);
+									if (errors.name) setErrors({ ...errors, name: undefined });
+								}}
+								disabled={isLoading}
+								className={errors.name ? 'border-red-500' : ''}
+							/>
+							{errors.name && <p className='text-sm text-red-500'>{errors.name}</p>}
+						</div>
+
+						{/* Campo de Email */}
+						<div className='space-y-1'>
+							<label htmlFor="email" className='text-sm font-medium'>
+								{t("notificationEmail") || "Email"}
+							</label>
+							<Input
+								id="email"
+								type="email"
+								placeholder={t("notificationEmailPlaceholder") || "Enter your email"}
+								value={email}
+								onChange={(e) => {
+									setEmail(e.target.value);
+									if (errors.email) setErrors({ ...errors, email: undefined });
+								}}
+								disabled={isLoading}
+								className={errors.email ? 'border-red-500' : ''}
+							/>
+							{errors.email && <p className='text-sm text-red-500'>{errors.email}</p>}
+						</div>
+
+						{/* Campo de Frequência */}
+						<div className='space-y-1'>
+							<label className='text-sm font-medium'>
+								{t("notificationFrequency") || "Frequency"}
+							</label>
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
-									<Button variant='outline' className='w-full'>
+									<Button 
+										variant='outline' 
+										className={`w-full ${errors.frequency ? 'border-red-500' : ''}`}
+										disabled={isLoading}
+									>
 										{frequency ? frequency : t("notificationSelect")}
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent className='w-full'>
-									<DropdownMenuItem onClick={() => setFrequency(t("notificationDaily"))}>{t("notificationDaily")}</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => setFrequency(t("notificationWeekly"))}>{t("notificationWeekly")}</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => setFrequency(t("notificationMonthly"))}>{t("notificationMonthly")}</DropdownMenuItem>
+									{/*<DropdownMenuItem onClick={() => {
+										setFrequency(t("notification60secTest"));
+										if (errors.frequency) setErrors({ ...errors, frequency: undefined });
+									}}>{t("notification60secTest")}</DropdownMenuItem>*/}
+									<DropdownMenuItem onClick={() => {
+										setFrequency(t("notificationDaily"));
+										if (errors.frequency) setErrors({ ...errors, frequency: undefined });
+									}}>{t("notificationDaily")}</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => {
+										setFrequency(t("notificationWeekly"));
+										if (errors.frequency) setErrors({ ...errors, frequency: undefined });
+									}}>{t("notificationWeekly")}</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => {
+										setFrequency(t("notificationMonthly"));
+										if (errors.frequency) setErrors({ ...errors, frequency: undefined });
+									}}>{t("notificationMonthly")}</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
+							{errors.frequency && <p className='text-sm text-red-500'>{errors.frequency}</p>}
 						</div>
-						<Button className='w-full' onClick={subscribeToPush}>{t("notificationSubscribe")}</Button>
-					</>
+
+						{/* Botão de Subscribe */}
+						<Button 
+							className='w-full' 
+							onClick={subscribeToPush}
+							disabled={isLoading}
+						>
+							{isLoading ? t("notificationSubscribing") || "Subscribing..." : t("notificationSubscribe")}
+						</Button>
+					</div>
 				)}
 			</p>
 		</div>
