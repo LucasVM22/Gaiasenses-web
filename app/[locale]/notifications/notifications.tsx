@@ -90,12 +90,12 @@ export default function PushNotificationManager() {
 			let formatFreq = "";
 			
 			switch (frequency) {
-				/*
+				
 				case 'Notification.notification60secTest':
 					first_push.setUTCMinutes(first_push.getUTCMinutes() + 1);
 					formatFreq = '60secondTest';
 					break;
-				*/
+				
 				case 'Daily':
 				case 'Diária':
 					first_push.setUTCDate(first_push.getUTCDate() + 1);
@@ -220,10 +220,10 @@ export default function PushNotificationManager() {
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent className='w-full'>
-									{/*<DropdownMenuItem onClick={() => {
+									<DropdownMenuItem onClick={() => {
 										setFrequency(t("notification60secTest"));
 										if (errors.frequency) setErrors({ ...errors, frequency: undefined });
-									}}>{t("notification60secTest")}</DropdownMenuItem>*/}
+									}}>{t("notification60secTest")}</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => {
 										setFrequency(t("notificationDaily"));
 										if (errors.frequency) setErrors({ ...errors, frequency: undefined });
