@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import type { espResponse } from "./ble-control";
+import type { espCo2Response, espResponse } from "./ble-control";
 
 import InfoButton from "./info-button";
 import NotificationDialog from "./notifications-dialog";
@@ -55,6 +55,7 @@ export default function GaiasensesMap({
 }: GaiasensesMapProps) {
   const mapRef = useRef<MapRef>(null);
   const latestSensorDataRef = useRef<espResponse | null>(null);
+  const latestCo2DataRef = useRef<espCo2Response | null>(null);
   const [motionTuning, setMotionTuning] = useState<MotionTuningSettings>(
     DEFAULT_MOTION_TUNING_SETTINGS,
   );
@@ -141,6 +142,7 @@ export default function GaiasensesMap({
       <Pd4WebMapAudioManager
         mapRef={mapRef}
         sensorDataRef={latestSensorDataRef}
+        co2DataRef={latestCo2DataRef}
       />
       <div>
         <AnimatePresence>
@@ -192,9 +194,12 @@ export default function GaiasensesMap({
             latestSensorDataRef.current = data;
             handleOnSensor(data);
           }}
+          onCo2Sensor={(data) => {
+            latestCo2DataRef.current = data;
+            handleOnCO2Sensor(data);
+          }}
           onConnect={handleControllerConnect}
           onDisconnect={handleControllerDisconnect}
-          onCo2Sensor={handleOnCO2Sensor}
         />
         <GeolocateControl onGeolocate={onGeolocate} />
         {showPopup && (

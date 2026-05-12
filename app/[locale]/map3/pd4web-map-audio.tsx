@@ -56,7 +56,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl";
 
-import type { espResponse } from "./ble-control";
+import type { espCo2Response, espResponse } from "./ble-control";
 
 import { primePd4WebRuntime } from "@/lib/pd4web-runtime";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,8 @@ type Pd4WebInstance = {
   resumeAudio?: () => void;
   /** Active pointer/touch state tracked by pd4web.gui.js DOM event handlers. */
   Touches?: Record<string | number, unknown>;
+  /** Present in newer generated runtimes; binds patch/ui wiring before init(). */
+  openPatch?: (patchName: string) => void;
 };
 
 /** Shape of the Emscripten module factory exposed by the pd4web.js loader script. */
@@ -97,6 +99,7 @@ type Pd4WebModuleType = {
 type Pd4WebModuleOptions = {
   locateFile?: (path: string, scriptDirectory: string) => string;
   mainScriptUrlOrBlob?: string;
+  wasmBinary?: ArrayBuffer;
 };
 
 declare global {
@@ -120,14 +123,33 @@ type Pd4WebMapAudioProps = {
   patch: Map3Pd4WebPatch;
   mapRef: React.RefObject<MapRef>;
   sensorDataRef: React.MutableRefObject<espResponse | null>;
+  co2DataRef: React.MutableRefObject<espCo2Response | null>;
   preferredPlaying: boolean;
   onPreferredPlayingChange: (nextPlaying: boolean) => void;
 };
+
+function normalizeLongitude(lng: number): number {
+  const normalized = ((((lng + 180) % 360) + 360) % 360) - 180;
+  return Object.is(normalized, -180) ? 180 : normalized;
+}
+
+function clampLatitude(lat: number): number {
+  return Math.max(-90, Math.min(90, lat));
+}
+
+function angularDeltaDegrees(a: number, b: number): number {
+  return ((b - a + 540) % 360) - 180;
+}
+
+function clampAbs(value: number, limit: number): number {
+  return Math.max(-limit, Math.min(limit, value));
+}
 
 export default function Pd4WebMapAudio({
   patch,
   mapRef,
   sensorDataRef,
+  co2DataRef,
   preferredPlaying,
   onPreferredPlayingChange,
 }: Pd4WebMapAudioProps) {
@@ -142,8 +164,16 @@ export default function Pd4WebMapAudio({
   const positionTimerRef = useRef<number | null>(null);
   /** Last map center dispatched to the patch; used for epsilon filtering. */
   const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
+  /** Last map values actually sent to Pd after smoothing/slew limiting. */
+  const lastSentMapRef = useRef<{ lat: number; lng: number } | null>(null);
   /** performance.now() timestamp of the last dispatched position; used for speed calculation. */
   const lastPositionTimeRef = useRef<number | null>(null);
+  /** Last BLE accel values sent to pd; used to suppress duplicate sends. */
+  const lastSentAccRef = useRef<{ x: number; y: number; z: number } | null>(
+    null,
+  );
+  /** Last CO2 value sent to pd; used to suppress duplicate sends. */
+  const lastSentCo2Ref = useRef<number | null>(null);
   /** Reference to the <script> element this component injected, so it can be
    *  removed on unmount (only set when we created the script ourselves). */
   const createdScriptRef = useRef<HTMLScriptElement | null>(null);
@@ -153,6 +183,9 @@ export default function Pd4WebMapAudio({
   const [isReady, setIsReady] = useState(false); // True once the Pd4Web instance is created
   const [isPlaying, setIsPlaying] = useState(false); // Reflects current audio play state
   const [error, setError] = useState<string | null>(null); // User-visible error message
+  const [debugLongitudeValue, setDebugLongitudeValue] = useState<number | null>(
+    null,
+  );
 
   // Derive the URLs needed to inject and configure the Emscripten loader.
   const scriptId = getPd4WebScriptId(patch.id);
@@ -169,7 +202,21 @@ export default function Pd4WebMapAudio({
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    let existingScript: HTMLScriptElement | null = null;
+
+    const loadScript = (script: HTMLScriptElement) =>
+      new Promise<void>((resolve, reject) => {
+        const onLoad = () => {
+          script.dataset.loaded = "true";
+          resolve();
+        };
+
+        const onError = () => {
+          reject(new Error(`Failed to load runtime script: ${script.src}`));
+        };
+
+        script.addEventListener("load", onLoad, { once: true });
+        script.addEventListener("error", onError, { once: true });
+      });
 
     /**
      * Tears down everything related to the current pd instance.
@@ -199,7 +246,11 @@ export default function Pd4WebMapAudio({
       initializedRef.current = false;
       toggleModeRef.current = null;
       lastPositionRef.current = null;
+      lastSentMapRef.current = null;
       lastPositionTimeRef.current = null;
+      lastSentAccRef.current = null;
+      lastSentCo2Ref.current = null;
+      setDebugLongitudeValue(null);
       setIsPlaying(false);
       setIsReady(false);
       setIsLoading(true);
@@ -216,23 +267,62 @@ export default function Pd4WebMapAudio({
         throw new Error("Pd4Web runtime is unavailable");
       }
 
-      const pd4WebModule = await moduleFactory({
-        mainScriptUrlOrBlob: scriptSrc,
+      const moduleOptions: Pd4WebModuleOptions = {
         locateFile: (path) => `${bundleBasePath}${path}`,
-      });
+      };
+
+      try {
+        const wasmResponse = await fetch(`${bundleBasePath}pd4web.wasm`);
+        if (wasmResponse.ok) {
+          moduleOptions.wasmBinary = await wasmResponse.arrayBuffer();
+        }
+      } catch {
+        // Fallback to runtime's default wasm loading path when prefetch fails.
+      }
+
+      const pd4WebModule = await moduleFactory(moduleOptions);
       if (cancelled) {
         return;
       }
 
       pdRef.current = primePd4WebRuntime(new pd4WebModule.Pd4Web());
+
+      // Newer Pd4Web builds require an explicit openPatch() call before init().
+      // Keep this conditional so older bundles continue to work unchanged.
+      if (typeof pdRef.current.openPatch === "function") {
+        pdRef.current.openPatch("index.pd");
+      }
+
       window.Pd4Web = pdRef.current;
       setError(null);
       setIsReady(true);
       setIsLoading(false);
     };
 
-    const handleReady = () => {
-      instantiatePd4Web().catch((err: unknown) => {
+    const ensureRuntimeScriptsAndInit = async () => {
+      try {
+        const existingScript = document.getElementById(
+          scriptId,
+        ) as HTMLScriptElement | null;
+
+        if (!existingScript) {
+          const script = document.createElement("script");
+          script.id = scriptId;
+          script.src = scriptSrc;
+          script.async = false;
+          createdScriptRef.current = script;
+          document.body.appendChild(script);
+          await loadScript(script);
+        } else if (existingScript.dataset.loaded !== "true") {
+          await loadScript(existingScript);
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        await instantiatePd4Web();
+      } catch (err: unknown) {
         if (cancelled) {
           return;
         }
@@ -241,52 +331,13 @@ export default function Pd4WebMapAudio({
           err instanceof Error ? err.message : "Failed to initialize Pd4Web",
         );
         setIsLoading(false);
-      });
+      }
     };
 
-    const handleScriptError = () => {
-      if (cancelled) {
-        return;
-      }
-
-      setError("Failed to load Pd4Web runtime");
-      setIsLoading(false);
-    };
-
-    existingScript = document.getElementById(
-      scriptId,
-    ) as HTMLScriptElement | null;
-
-    // Check whether the loader script is already in the DOM (e.g. from a
-    // previous React mount). If so, reuse it to avoid loading the same WASM
-    // bundle twice. If Pd4WebModule is already set the script has already run.
-    if (existingScript) {
-      if (window.Pd4WebModule) {
-        handleReady();
-      } else {
-        existingScript.addEventListener("load", handleReady, { once: true });
-        existingScript.addEventListener("error", handleScriptError, {
-          once: true,
-        });
-      }
-    } else {
-      const script = document.createElement("script");
-      script.id = scriptId;
-      script.src = scriptSrc;
-      script.async = true;
-      createdScriptRef.current = script;
-      script.addEventListener("load", handleReady, { once: true });
-      script.addEventListener("error", handleScriptError, { once: true });
-      document.body.appendChild(script);
-    }
+    ensureRuntimeScriptsAndInit();
 
     return () => {
       cancelled = true;
-
-      if (existingScript && !window.Pd4WebModule) {
-        existingScript.removeEventListener("load", handleReady);
-        existingScript.removeEventListener("error", handleScriptError);
-      }
 
       if (createdScriptRef.current) {
         createdScriptRef.current.remove();
@@ -307,7 +358,13 @@ export default function Pd4WebMapAudio({
   // changes (different patch selected).
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!isReady || !pdRef.current || patch.binding.type !== "map-center") {
+    if (
+      !isReady ||
+      !isPlaying ||
+      !initializedRef.current ||
+      !pdRef.current ||
+      patch.binding.type !== "map-center"
+    ) {
       return;
     }
 
@@ -315,6 +372,10 @@ export default function Pd4WebMapAudio({
     const binding = patch.binding;
     const positionEpsilon = binding.epsilon ?? 0.0001;
     const positionPollMs = binding.pollMs ?? 100;
+    const sensorEpsilon = 0.0001;
+    const mapSmoothingAlpha = 0.25;
+    const maxLongitudeStepPerTick = 6;
+    const maxLatitudeStepPerTick = 3;
 
     /**
      * Reads the current map center, applies epsilon filtering, and dispatches
@@ -327,12 +388,15 @@ export default function Pd4WebMapAudio({
      *   the globe", independent of zoom level.
      */
     const syncPosition = () => {
-      const center = mapRef.current?.getCenter().wrap();
+      const center = mapRef.current?.getCenter();
       if (!center) {
         return;
       }
 
-      const nextPosition = { lat: center.lat, lng: center.lng };
+      const nextPosition = {
+        lat: clampLatitude(center.lat),
+        lng: normalizeLongitude(center.lng),
+      };
       const lastPosition = lastPositionRef.current;
       const now = performance.now();
 
@@ -342,23 +406,111 @@ export default function Pd4WebMapAudio({
         Math.abs(lastPosition.lng - nextPosition.lng) >= positionEpsilon;
 
       if (hasPositionChanged) {
+        let nextLongitudeToSend = nextPosition.lng;
+        let nextLatitudeToSend = nextPosition.lat;
+
+        if (lastSentMapRef.current) {
+          const previousSent = lastSentMapRef.current;
+          const longitudeDelta = angularDeltaDegrees(
+            previousSent.lng,
+            nextPosition.lng,
+          );
+          const latitudeDelta = nextPosition.lat - previousSent.lat;
+
+          const slewedLongitude = normalizeLongitude(
+            previousSent.lng +
+              clampAbs(longitudeDelta, maxLongitudeStepPerTick),
+          );
+          const slewedLatitude = clampLatitude(
+            previousSent.lat + clampAbs(latitudeDelta, maxLatitudeStepPerTick),
+          );
+
+          nextLongitudeToSend = normalizeLongitude(
+            previousSent.lng +
+              angularDeltaDegrees(previousSent.lng, slewedLongitude) *
+                mapSmoothingAlpha,
+          );
+          nextLatitudeToSend = clampLatitude(
+            previousSent.lat +
+              (slewedLatitude - previousSent.lat) * mapSmoothingAlpha,
+          );
+        }
+
         binding.longitudeReceiver &&
-          pd.sendFloat(binding.longitudeReceiver, nextPosition.lng);
+          pd.sendFloat(binding.longitudeReceiver, nextLongitudeToSend);
+        if (binding.longitudeReceiver === "rotacaoSite") {
+          setDebugLongitudeValue(nextLongitudeToSend);
+        }
         binding.latitudeReceiver &&
-          pd.sendFloat(binding.latitudeReceiver, nextPosition.lat);
+          pd.sendFloat(binding.latitudeReceiver, nextLatitudeToSend);
+
+        lastSentMapRef.current = {
+          lat: nextLatitudeToSend,
+          lng: nextLongitudeToSend,
+        };
       }
 
       const acc = sensorDataRef.current?.acc;
-      if (binding.accXReceiver && typeof acc?.x === "number") {
-        console.log(performance.now());
-        console.log("Sending acc.x to patch:", acc.x);
+      if (!lastSentAccRef.current && acc) {
+        lastSentAccRef.current = {
+          x: typeof acc.x === "number" && Number.isFinite(acc.x) ? acc.x : 0,
+          y: typeof acc.y === "number" && Number.isFinite(acc.y) ? acc.y : 0,
+          z: typeof acc.z === "number" && Number.isFinite(acc.z) ? acc.z : 0,
+        };
+      }
+      if (
+        binding.accXReceiver &&
+        typeof acc?.x === "number" &&
+        Number.isFinite(acc.x) &&
+        (!lastSentAccRef.current ||
+          Math.abs(lastSentAccRef.current.x - acc.x) >= sensorEpsilon)
+      ) {
         pd.sendFloat(binding.accXReceiver, acc.x);
+        lastSentAccRef.current = {
+          x: acc.x,
+          y: lastSentAccRef.current?.y ?? 0,
+          z: lastSentAccRef.current?.z ?? 0,
+        };
       }
-      if (binding.accYReceiver && typeof acc?.y === "number") {
+      if (
+        binding.accYReceiver &&
+        typeof acc?.y === "number" &&
+        Number.isFinite(acc.y) &&
+        (!lastSentAccRef.current ||
+          Math.abs(lastSentAccRef.current.y - acc.y) >= sensorEpsilon)
+      ) {
         pd.sendFloat(binding.accYReceiver, acc.y);
+        lastSentAccRef.current = {
+          x: lastSentAccRef.current?.x ?? 0,
+          y: acc.y,
+          z: lastSentAccRef.current?.z ?? 0,
+        };
       }
-      if (binding.accZReceiver && typeof acc?.z === "number") {
+      if (
+        binding.accZReceiver &&
+        typeof acc?.z === "number" &&
+        Number.isFinite(acc.z) &&
+        (!lastSentAccRef.current ||
+          Math.abs(lastSentAccRef.current.z - acc.z) >= sensorEpsilon)
+      ) {
         pd.sendFloat(binding.accZReceiver, acc.z);
+        lastSentAccRef.current = {
+          x: lastSentAccRef.current?.x ?? 0,
+          y: lastSentAccRef.current?.y ?? 0,
+          z: acc.z,
+        };
+      }
+
+      const co2 = co2DataRef.current?.co2?.ppm;
+      if (
+        binding.co2Receiver &&
+        typeof co2 === "number" &&
+        Number.isFinite(co2) &&
+        (lastSentCo2Ref.current === null ||
+          Math.abs(lastSentCo2Ref.current - co2) >= sensorEpsilon)
+      ) {
+        pd.sendFloat(binding.co2Receiver, co2);
+        lastSentCo2Ref.current = co2;
       }
 
       if (
@@ -372,7 +524,7 @@ export default function Pd4WebMapAudio({
           const dlat = nextPosition.lat - lastPosition.lat;
           // cos correction: accounts for longitude lines converging near poles
           const dlng =
-            (nextPosition.lng - lastPosition.lng) *
+            angularDeltaDegrees(lastPosition.lng, nextPosition.lng) *
             Math.cos((nextPosition.lat * Math.PI) / 180);
           const speed = Math.sqrt(dlat * dlat + dlng * dlng) / dtSeconds;
           pd.sendFloat(binding.speedReceiver, speed);
@@ -394,7 +546,7 @@ export default function Pd4WebMapAudio({
         positionTimerRef.current = null;
       }
     };
-  }, [isReady, mapRef, patch.binding, sensorDataRef]);
+  }, [isReady, isPlaying, mapRef, patch.binding, sensorDataRef, co2DataRef]);
 
   // ---------------------------------------------------------------------------
   // Effect #3 — Auto-resume playback
@@ -516,7 +668,6 @@ export default function Pd4WebMapAudio({
 
   return (
     <div className="absolute left-4 bottom-4 z-20 flex flex-col gap-2 pointer-events-auto">
-      <span id="Pd4WebAudioSwitch" className="hidden" aria-hidden="true" />
       <Button
         onClick={handleToggle}
         disabled={!isReady || isLoading}
@@ -531,6 +682,13 @@ export default function Pd4WebMapAudio({
       {error ? (
         <div className="max-w-[18rem] rounded bg-white/90 px-3 py-2 text-xs text-red-600 shadow-sm">
           {error}
+        </div>
+      ) : null}
+      {patch.binding.type === "map-center" &&
+      patch.binding.longitudeReceiver ? (
+        <div className="rounded bg-black/65 px-2 py-1 font-mono text-[10px] leading-none text-white shadow-sm">
+          {patch.binding.longitudeReceiver}:{" "}
+          {debugLongitudeValue?.toFixed(4) ?? "-"}
         </div>
       ) : null}
     </div>

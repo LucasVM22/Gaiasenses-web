@@ -56,6 +56,7 @@ export type Map3Pd4WebBinding =
       accXReceiver?: string;
       accYReceiver?: string;
       accZReceiver?: string;
+      co2Receiver?: string;
       /**
        * Optional receiver name for globe rotation speed in degrees/second.
        * The value is a cos-corrected angular speed computed from successive map
@@ -163,18 +164,40 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
   //     epsilon: DEFAULT_POSITION_EPSILON,
   //   },
   // },
+  //This one is working
+  // {
+  //   id: "gabriel-paraisoGaia8",
+  //   label: "Map sound 3",
+  //   bundleFolder: "gabriel-paraisoGaia8_2",
+  //   activation: {
+  //     moments: ["map"],
+  //   },
+  //   binding: {
+  //     type: "map-center",
+  //     latitudeReceiver: "x1",
+  //     longitudeReceiver: "y1",
+  //     // accXReceiver: "input_accX",
+  //     // accYReceiver: "input_accY",
+  //     // accZReceiver: "input_accZ",
+  //     // co2Receiver: "input_co2",
+  //     pollMs: DEFAULT_POSITION_POLL_MS,
+  //     epsilon: DEFAULT_POSITION_EPSILON,
+  //   },
   {
-    id: "gabriel-paraisoGaia8",
-    label: "Map sound 3",
-    bundleFolder: "gabriel-paraisoGaia8",
+    id: "gabriel-paraiso24",
+    label: "Map sound 24",
+    bundleFolder: "gabriel-paraiso24",
     activation: {
       moments: ["map"],
     },
     binding: {
       type: "map-center",
-      latitudeReceiver: "x1",
-      longitudeReceiver: "y1",
-
+      latitudeReceiver: "lati",
+      longitudeReceiver: "rotacaoSite",
+      // accXReceiver: "input_accX",
+      // accYReceiver: "input_accY",
+      // accZReceiver: "input_accZ",
+      // co2Receiver: "input_co2",
       pollMs: DEFAULT_POSITION_POLL_MS,
       epsilon: DEFAULT_POSITION_EPSILON,
     },

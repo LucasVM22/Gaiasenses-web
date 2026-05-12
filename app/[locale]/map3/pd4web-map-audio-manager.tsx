@@ -27,7 +27,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { MapRef } from "react-map-gl";
 
-import type { espResponse } from "./ble-control";
+import type { espCo2Response, espResponse } from "./ble-control";
 import Pd4WebMapAudio from "./pd4web-map-audio";
 import {
   resolveMap3Pd4WebPatch,
@@ -37,6 +37,7 @@ import {
 type Pd4WebMapAudioManagerProps = {
   mapRef: React.RefObject<MapRef>;
   sensorDataRef: React.MutableRefObject<espResponse | null>;
+  co2DataRef: React.MutableRefObject<espCo2Response | null>;
 };
 
 /** localStorage key that remembers whether map audio was playing. */
@@ -53,6 +54,7 @@ function normalizeMoment(value: string | null): Map3Pd4WebMoment {
 export default function Pd4WebMapAudioManager({
   mapRef,
   sensorDataRef,
+  co2DataRef,
 }: Pd4WebMapAudioManagerProps) {
   const searchParams = useSearchParams();
   const [shouldResumeMapAudio, setShouldResumeMapAudio] = useState(false);
@@ -96,6 +98,7 @@ export default function Pd4WebMapAudioManager({
       patch={activePatch}
       mapRef={mapRef}
       sensorDataRef={sensorDataRef}
+      co2DataRef={co2DataRef}
       preferredPlaying={shouldResumeMapAudio}
       onPreferredPlayingChange={setShouldResumeMapAudio}
     />
