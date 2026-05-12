@@ -3,7 +3,6 @@ import LightningTreesSketch from "./lightning-trees-sketch";
 import CompositionControls from "../composition-controls";
 import DebugPanel from "@/components/debug-panel/debug-panel";
 import { getLightning } from "@/components/getData";
-import Pd4WebPlayer from "../pd4web-player";
 
 export type LightningTreesProps = {
   lat: string;
@@ -31,8 +30,12 @@ export default async function LightningTrees(props: LightningTreesProps) {
 
   return (
     <Composition>
-      <LightningTreesSketch key={refreshKey} lightningCount={lightningCount} play={props.play} />
-      <Pd4WebPlayer packageName={packageName} play={props.play}></Pd4WebPlayer>
+      <LightningTreesSketch
+        key={refreshKey}
+        lightningCount={lightningCount}
+        play={props.play}
+      />
+
       {<DebugPanel data={[{ lightningCount }]} />}
     </Composition>
   );

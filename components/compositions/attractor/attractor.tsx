@@ -3,8 +3,6 @@ import AttractorSketch from "./attractor-sketch";
 import CompositionControls from "../composition-controls";
 import DebugPanel from "@/components/debug-panel/debug-panel";
 import { getLightning } from "@/components/getData";
-import Pd4WebPlayer from "../pd4web-player";
-import usePd4Web from "@/hooks/use-pd4web";
 
 export type AttractorProps = {
   lat: string;
@@ -32,8 +30,12 @@ export default async function Attractor(props: AttractorProps) {
 
   return (
     <Composition>
-      <AttractorSketch key={refreshKey} lightningCount={lightningCount} play={props.play} />
-      <Pd4WebPlayer packageName={packageName} play={props.play} />
+      <AttractorSketch
+        key={refreshKey}
+        lightningCount={lightningCount}
+        play={props.play}
+      />
+
       {<DebugPanel data={[{ lightningCount }]} />}
     </Composition>
   );
