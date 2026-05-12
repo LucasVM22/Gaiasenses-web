@@ -77,6 +77,16 @@ export type Map3Pd4WebBinding =
        * Defaults to 0.0001° (≈ 10 m at the equator).
        */
       epsilon?: number;
+      /**
+       * One-pole smoothing factor applied before values are sent to pd.
+       * 0 = maximum smoothing, 1 = no smoothing. Typical range: 0.1 .. 0.3.
+       */
+      smoothingAlpha?: number;
+      /**
+       * Optional hard cap for per-tick movement in degrees after smoothing.
+       * Helps suppress sudden jumps from large map deltas or wrap boundaries.
+       */
+      maxStepPerTick?: number;
     }
   | {
       type: "none";
@@ -110,8 +120,8 @@ export type Map3Pd4WebPatch = {
   binding: Map3Pd4WebBinding;
 };
 
-/** Interval between position polls in milliseconds. 100 ms = 10 Hz. */
-const DEFAULT_POSITION_POLL_MS = 100;
+/** Interval between position polls in milliseconds. 32 ms = 30 Hz. */
+const DEFAULT_POSITION_POLL_MS = 300;
 
 /**
  * Minimum lat/lng delta (degrees) that triggers a sendFloat call.
@@ -184,9 +194,9 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
   //     epsilon: DEFAULT_POSITION_EPSILON,
   //   },
   {
-    id: "gabriel-paraiso25",
-    label: "Map sound 25",
-    bundleFolder: "gabriel-paraiso25",
+    id: "paraiso26",
+    label: "Map sound 26",
+    bundleFolder: "paraiso26",
     activation: {
       moments: ["map"],
     },
@@ -198,8 +208,10 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
       // accYReceiver: "input_accY",
       // accZReceiver: "input_accZ",
       // co2Receiver: "input_co2",
-      pollMs: DEFAULT_POSITION_POLL_MS,
-      epsilon: DEFAULT_POSITION_EPSILON,
+      pollMs: 30,
+      epsilon: 0.0005,
+      smoothingAlpha: 0.12,
+      maxStepPerTick: 1.5,
     },
   },
 ] as const;
