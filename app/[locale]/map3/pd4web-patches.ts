@@ -77,16 +77,6 @@ export type Map3Pd4WebBinding =
        * Defaults to 0.0001° (≈ 10 m at the equator).
        */
       epsilon?: number;
-      /**
-       * One-pole smoothing factor applied before values are sent to pd.
-       * 0 = maximum smoothing, 1 = no smoothing. Typical range: 0.1 .. 0.3.
-       */
-      smoothingAlpha?: number;
-      /**
-       * Optional hard cap for per-tick movement in degrees after smoothing.
-       * Helps suppress sudden jumps from large map deltas or wrap boundaries.
-       */
-      maxStepPerTick?: number;
     }
   | {
       type: "none";
@@ -210,9 +200,23 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
       // co2Receiver: "input_co2",
       pollMs: 32,
       epsilon: 0.0001,
-      smoothingAlpha: 0.04,
-      maxStepPerTick: 360,
     },
+    // {
+    //   id: "testeBS",
+    //   label: "Map sound testeBS",
+    //   bundleFolder: "testeBS",
+    //   activation: {
+    //     moments: ["map"],
+    //   },
+    //   binding: {
+    //     type: "map-center",
+    //     // latitudeReceiver: "lati",
+    //     // longitudeReceiver: "rotacaoSite",
+    //     // accXReceiver: "input_accX",
+    //     // accYReceiver: "input_accY",
+    //     // accZReceiver: "input_accZ",
+    //     // co2Receiver: "input_co2",
+    //   },
   },
 ] as const;
 

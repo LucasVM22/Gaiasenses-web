@@ -1,5 +1,4 @@
 "use client";
-import useWebpd from "@/hooks/use-webpd";
 
 import TogglePlayButton from "./toggle-play-button";
 import { PatchData } from "@/hooks/types";
@@ -18,43 +17,20 @@ export default function CompositionControls({
   messages?: PatchData["messages"];
   mp3?: boolean;
 }) {
-  const { start, status, suspend, sendMsgToWebPd, resume, close } =
-    useWebpd(patchPath);
-
   //  console.log(patchPath);
   // console.log(messages);
-
-  if (patchPath && !mp3) {
-    if (status === "playing") {
-      //console.log("is playing, sending msg");
-      messages?.forEach((item) => {
-        sendMsgToWebPd(item.nodeId, item.portletId, item.message);
-      });
-    }
-  }
 
   function handlePlay() {
     //play sound
 
     if (patchPath) {
-      if (status === "waiting") {
-        start(patchPath).then(() => {
-          // messages?.forEach((item) => {
-          //   sendMsgToWebPd(item.nodeId, item.portletId, item.message);
-          // });
-        });
-      }
-      if (status === "suspended") {
-        resume && resume();
-      }
+      console.log("webpd is removed");
     }
   }
 
   async function handlePause() {
     if (patchPath) {
-      if (status === "started" || status == "playing") {
-        suspend && suspend();
-      }
+      console.log("webpd is removed");
     }
   }
 

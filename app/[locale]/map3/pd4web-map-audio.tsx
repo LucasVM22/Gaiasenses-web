@@ -164,10 +164,8 @@ export default function Pd4WebMapAudio({
   const toggleModeRef = useRef<"soundToggle" | "resumeSuspend" | null>(null);
   /** setInterval handle for the map-center position polling loop. */
   const positionTimerRef = useRef<number | null>(null);
-  /** Last map center dispatched to the patch; used for epsilon filtering. */
+  /** Last map center dispatched to the patch; used for speed calculation. */
   const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
-  /** Smoothed map center used for pd parameter updates. */
-  const smoothedPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   /** performance.now() timestamp of the last dispatched position; used for speed calculation. */
   const lastPositionTimeRef = useRef<number | null>(null);
   /** Last BLE accel values sent to pd; used to suppress duplicate sends. */
@@ -179,6 +177,8 @@ export default function Pd4WebMapAudio({
   /** Reference to the <script> element this component injected, so it can be
    *  removed on unmount (only set when we created the script ourselves). */
   const createdScriptRef = useRef<HTMLScriptElement | null>(null);
+  /** Hidden button that Pd4Web binds its native sound toggle listener to. */
+  const runtimeSoundToggleRef = useRef<HTMLButtonElement | null>(null);
 
   // --- State (triggers re-render) ---
   const [isLoading, setIsLoading] = useState(true); // True while script + WASM are loading
@@ -193,8 +193,6 @@ export default function Pd4WebMapAudio({
   );
   const [tunablePollMs, setTunablePollMs] = useState(100);
   const [tunableEpsilon, setTunableEpsilon] = useState(0.0001);
-  const [tunableSmoothingAlpha, setTunableSmoothingAlpha] = useState(0.2);
-  const [tunableMaxStepPerTick, setTunableMaxStepPerTick] = useState(0);
   const [debugPositionLog, setDebugPositionLog] = useState<
     Array<{
       ts: number;
@@ -220,8 +218,6 @@ export default function Pd4WebMapAudio({
 
     setTunablePollMs(mapCenterBinding.pollMs ?? 100);
     setTunableEpsilon(mapCenterBinding.epsilon ?? 0.0001);
-    setTunableSmoothingAlpha(mapCenterBinding.smoothingAlpha ?? 0.2);
-    setTunableMaxStepPerTick(mapCenterBinding.maxStepPerTick ?? 0);
   }, [patch.id, mapCenterBinding]);
 
   // ---------------------------------------------------------------------------
@@ -278,7 +274,6 @@ export default function Pd4WebMapAudio({
       initializedRef.current = false;
       toggleModeRef.current = null;
       lastPositionRef.current = null;
-      smoothedPositionRef.current = null;
       lastPositionTimeRef.current = null;
       lastSentAccRef.current = null;
       lastSentCo2Ref.current = null;
@@ -408,11 +403,6 @@ export default function Pd4WebMapAudio({
     const binding = patch.binding;
     const positionEpsilon = Math.max(0, tunableEpsilon);
     const positionPollMs = Math.max(16, Math.round(tunablePollMs));
-    const smoothingAlpha = Math.max(0, Math.min(1, tunableSmoothingAlpha));
-    const maxStepPerTick =
-      Number.isFinite(tunableMaxStepPerTick) && tunableMaxStepPerTick > 0
-        ? tunableMaxStepPerTick
-        : null;
     const sensorEpsilon = 0.0001;
 
     /**
@@ -435,76 +425,31 @@ export default function Pd4WebMapAudio({
         lat: clampLatitude(center.lat),
         lng: normalizeLongitude(center.lng),
       };
-      const previousSmoothed = smoothedPositionRef.current;
-      let smoothedPosition =
-        previousSmoothed === null
-          ? nextPosition
-          : {
-              lat:
-                previousSmoothed.lat +
-                (nextPosition.lat - previousSmoothed.lat) * smoothingAlpha,
-              lng: normalizeLongitude(
-                previousSmoothed.lng +
-                  angularDeltaDegrees(previousSmoothed.lng, nextPosition.lng) *
-                    smoothingAlpha,
-              ),
-            };
-
-      if (previousSmoothed && maxStepPerTick !== null) {
-        const latDelta = smoothedPosition.lat - previousSmoothed.lat;
-        const lngDelta = angularDeltaDegrees(
-          previousSmoothed.lng,
-          smoothedPosition.lng,
-        );
-        const latDeltaClamped = Math.max(
-          -maxStepPerTick,
-          Math.min(maxStepPerTick, latDelta),
-        );
-        const lngDeltaClamped = Math.max(
-          -maxStepPerTick,
-          Math.min(maxStepPerTick, lngDelta),
-        );
-        smoothedPosition = {
-          lat: clampLatitude(previousSmoothed.lat + latDeltaClamped),
-          lng: normalizeLongitude(previousSmoothed.lng + lngDeltaClamped),
-        };
-      }
-
-      smoothedPositionRef.current = smoothedPosition;
+      const positionForDispatch = nextPosition;
 
       const lastPosition = lastPositionRef.current;
       const now = performance.now();
 
-      const hasPositionChanged =
-        !lastPosition ||
-        Math.abs(lastPosition.lat - smoothedPosition.lat) >= positionEpsilon ||
-        Math.abs(angularDeltaDegrees(lastPosition.lng, smoothedPosition.lng)) >=
-          positionEpsilon;
+      if (binding.longitudeReceiver) {
+        pd.sendFloat(binding.longitudeReceiver, positionForDispatch.lng);
+        setDebugLongitudeValue(positionForDispatch.lng);
+      }
+      if (binding.latitudeReceiver) {
+        pd.sendFloat(binding.latitudeReceiver, positionForDispatch.lat);
+        setDebugLatitudeValue(positionForDispatch.lat);
+      }
 
-      if (hasPositionChanged) {
-        binding.longitudeReceiver &&
-          pd.sendFloat(binding.longitudeReceiver, smoothedPosition.lng);
-        if (binding.longitudeReceiver) {
-          setDebugLongitudeValue(smoothedPosition.lng);
-        }
-        binding.latitudeReceiver &&
-          pd.sendFloat(binding.latitudeReceiver, smoothedPosition.lat);
-        if (binding.latitudeReceiver) {
-          setDebugLatitudeValue(smoothedPosition.lat);
-        }
-
-        if (binding.longitudeReceiver || binding.latitudeReceiver) {
-          setDebugPositionLog((prev) => {
-            const nextEntry = {
-              ts: Date.now(),
-              lng: smoothedPosition.lng,
-              lat: smoothedPosition.lat,
-              lngReceiver: binding.longitudeReceiver ?? null,
-              latReceiver: binding.latitudeReceiver ?? null,
-            };
-            return [nextEntry, ...prev].slice(0, 8);
-          });
-        }
+      if (binding.longitudeReceiver || binding.latitudeReceiver) {
+        setDebugPositionLog((prev) => {
+          const nextEntry = {
+            ts: Date.now(),
+            lng: Math.round(positionForDispatch.lng),
+            lat: Math.round(positionForDispatch.lat),
+            lngReceiver: binding.longitudeReceiver ?? null,
+            latReceiver: binding.latitudeReceiver ?? null,
+          };
+          return [nextEntry, ...prev].slice(0, 8);
+        });
       }
 
       const acc = sensorDataRef.current?.acc;
@@ -571,27 +516,24 @@ export default function Pd4WebMapAudio({
       }
 
       if (
-        hasPositionChanged &&
         binding.speedReceiver &&
         lastPosition &&
         lastPositionTimeRef.current !== null
       ) {
         const dtSeconds = (now - lastPositionTimeRef.current) / 1000;
         if (dtSeconds > 0) {
-          const dlat = smoothedPosition.lat - lastPosition.lat;
+          const dlat = positionForDispatch.lat - lastPosition.lat;
           // cos correction: accounts for longitude lines converging near poles
           const dlng =
-            angularDeltaDegrees(lastPosition.lng, smoothedPosition.lng) *
-            Math.cos((smoothedPosition.lat * Math.PI) / 180);
+            angularDeltaDegrees(lastPosition.lng, positionForDispatch.lng) *
+            Math.cos((positionForDispatch.lat * Math.PI) / 180);
           const speed = Math.sqrt(dlat * dlat + dlng * dlng) / dtSeconds;
           pd.sendFloat(binding.speedReceiver, speed);
         }
       }
 
-      if (hasPositionChanged) {
-        lastPositionRef.current = smoothedPosition;
-        lastPositionTimeRef.current = now;
-      }
+      lastPositionRef.current = positionForDispatch;
+      lastPositionTimeRef.current = now;
     };
 
     syncPosition();
@@ -611,8 +553,6 @@ export default function Pd4WebMapAudio({
     patch.binding,
     tunablePollMs,
     tunableEpsilon,
-    tunableSmoothingAlpha,
-    tunableMaxStepPerTick,
     sensorDataRef,
     co2DataRef,
   ]);
@@ -623,32 +563,11 @@ export default function Pd4WebMapAudio({
    * so subsequent toggles don't repeat the feature check.
    */
   const toggleAfterInit = async (nextPlaying: boolean) => {
-    const pd = pdRef.current;
-    if (!pd) {
+    if (!runtimeSoundToggleRef.current) {
       return;
     }
 
-    if (toggleModeRef.current === null) {
-      if (
-        typeof pd.resumeAudio === "function" &&
-        typeof pd.suspendAudio === "function"
-      ) {
-        toggleModeRef.current = "resumeSuspend";
-      } else if (typeof pd.soundToggle === "function") {
-        toggleModeRef.current = "soundToggle";
-      }
-    }
-
-    if (toggleModeRef.current === "resumeSuspend") {
-      if (nextPlaying) {
-        pd.resumeAudio?.();
-      } else {
-        pd.suspendAudio?.();
-      }
-      return;
-    }
-
-    pd.soundToggle?.();
+    runtimeSoundToggleRef.current.click();
   };
 
   /**
@@ -670,6 +589,7 @@ export default function Pd4WebMapAudio({
       if (!initializedRef.current) {
         await pd.init();
         initializedRef.current = true;
+        runtimeSoundToggleRef.current?.click();
         setIsPlaying(true);
         onPreferredPlayingChange(true);
         return;
@@ -686,9 +606,18 @@ export default function Pd4WebMapAudio({
 
   return (
     <div className="absolute left-4 bottom-4 z-20 flex flex-col gap-2 pointer-events-auto">
-      <Button
+      <button
+        ref={runtimeSoundToggleRef}
         id={soundToggleId}
-        onClick={handleToggle}
+        type="button"
+        hidden
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <Button
+        onClick={() => {
+          void handleToggle();
+        }}
         disabled={!isReady || isLoading}
         variant="secondary"
       >
@@ -748,43 +677,6 @@ export default function Pd4WebMapAudio({
                   const nextValue = Number(event.target.value);
                   if (Number.isFinite(nextValue)) {
                     setTunableEpsilon(nextValue);
-                  }
-                }}
-                className="h-7 border-white/20 bg-white/10 px-2 py-1 text-[10px] text-white"
-              />
-            </label>
-            <label className="space-y-1">
-              <div className="uppercase tracking-wide text-white/80">
-                smoothing
-              </div>
-              <Input
-                type="number"
-                min={0}
-                max={1}
-                step={0.01}
-                value={tunableSmoothingAlpha}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value);
-                  if (Number.isFinite(nextValue)) {
-                    setTunableSmoothingAlpha(nextValue);
-                  }
-                }}
-                className="h-7 border-white/20 bg-white/10 px-2 py-1 text-[10px] text-white"
-              />
-            </label>
-            <label className="space-y-1">
-              <div className="uppercase tracking-wide text-white/80">
-                max step
-              </div>
-              <Input
-                type="number"
-                min={0}
-                step={0.1}
-                value={tunableMaxStepPerTick}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value);
-                  if (Number.isFinite(nextValue)) {
-                    setTunableMaxStepPerTick(nextValue);
                   }
                 }}
                 className="h-7 border-white/20 bg-white/10 px-2 py-1 text-[10px] text-white"
