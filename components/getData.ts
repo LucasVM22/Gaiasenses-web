@@ -55,45 +55,49 @@ export default async function getData(
   endpoint: string,
   lat: string,
   lon: string,
-  dist?: number
+  dist?: number,
 ) {
   console.log(
     `https://7ghevyl79d.execute-api.sa-east-1.amazonaws.com/prod/${endpoint}?lat=${lat}&lon=${lon}${
       dist ? `&dist=${dist}` : ""
-    }`
-  );
-  const res = await fetch(
-    `https://7ghevyl79d.execute-api.sa-east-1.amazonaws.com/prod/${endpoint}?lat=${lat}&lon=${lon}${
-      dist ? `&dist=${dist}` : ""
     }`,
-    { next: { revalidate: 7200 } }
   );
-  // The return value is *not* serialized
-  // You can return Date, Map, Set, etc.
+  try {
+    const res = await fetch(
+      `https://7ghevyl79d.execute-api.sa-east-1.amazonaws.com/prod/${endpoint}?lat=${lat}&lon=${lon}${
+        dist ? `&dist=${dist}` : ""
+      }`,
+      { next: { revalidate: 7200 } },
+    );
+    // The return value is *not* serialized
+    // You can return Date, Map, Set, etc.
 
-  if (!res.ok) {
-    //This will activate the closest `error.js` Error Boundary
+    if (!res.ok) {
+      //This will activate the closest `error.js` Error Boundary
 
-    if (res.status === 503) {
-      console.log(
+      if (res.status === 503) {
+        console.log(
+          `Failed to fetch data from https://satellite-fetcher.up.railway.app/${endpoint}?lat=${lat}&lon=${lon}${
+            dist ? `&dist=${dist}` : ""
+          } Got status ${res.status}: ${res.statusText}`,
+        );
+      }
+      throw new Error(
         `Failed to fetch data from https://satellite-fetcher.up.railway.app/${endpoint}?lat=${lat}&lon=${lon}${
           dist ? `&dist=${dist}` : ""
-        } Got status ${res.status}: ${res.statusText}`
+        } got status ${res.status}; ${res.statusText}`,
       );
     }
-    throw new Error(
-      `Failed to fetch data from https://satellite-fetcher.up.railway.app/${endpoint}?lat=${lat}&lon=${lon}${
-        dist ? `&dist=${dist}` : ""
-      } got status ${res.status}; ${res.statusText}`
-    );
+    return res.json();
+  } catch (error) {
+    console.log(error);
   }
-  return res.json();
 }
 
 export async function getFireSpots(
   lat: string,
   lon: string,
-  dist?: number
+  dist?: number,
 ): Promise<FireSpotsResponseData> {
   return await getData("fire", lat, lon, dist);
 }
@@ -101,21 +105,21 @@ export async function getFireSpots(
 async function openWeather(
   lat: string | number,
   lon: string | number,
-  lang: string
+  lang: string,
 ): Promise<RainfallResponseData> {
   const part = "minutely,hourly,daily,alerts";
 
   try {
     const res = await fetch(
       `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=${part}&appid=${process.env.OPEN_WEATHER_API_KEY}&units=metric&lang=${lang}`,
-      { next: { revalidate: 7200 } }
+      { next: { revalidate: 7200 } },
     );
 
     if (!res.ok) {
       throw new Error(
         `Response from openweather was not ok. Status: ${
           res.status
-        } Message: ${await res.text()}`
+        } Message: ${await res.text()}`,
       ); // some people throw the response entirely
     }
     const data = await res.json();
@@ -182,7 +186,7 @@ async function openWeather(
 export async function getWeather(
   lat: string | number,
   lon: string | number,
-  options = { lang: "pt_br" }
+  options = { lang: "pt_br" },
 ): Promise<RainfallResponseData> {
   if (options && options.lang === "en") options.lang = "en_us";
   if (options && options.lang === "pt") options.lang = "pt_br";
@@ -197,7 +201,7 @@ export async function getWeather(
 export async function getLightning(
   lat: string,
   lon: string,
-  dist: number
+  dist: number,
 ): Promise<LightningResponseData> {
   try {
     const res = await getData("lightning", lat, lon, dist);
@@ -214,14 +218,14 @@ export async function getLightning(
 
 export async function getBrightness(
   lat: string,
-  lon: string
+  lon: string,
 ): Promise<BrightnessResponseData> {
   return getData("brightness", lat, lon);
 }
 
 export async function reverseGeocode(
   lat: string | number,
-  lon: string | number
+  lon: string | number,
 ): Promise<{
   name: string;
   local_name: any[];
@@ -240,7 +244,7 @@ export async function reverseGeocode(
       throw new Error(
         `Response from reverse geocode was not ok. Status: ${
           res.status
-        } Message: ${await res.text()}`
+        } Message: ${await res.text()}`,
       ); // some people throw the response entirely
     }
 

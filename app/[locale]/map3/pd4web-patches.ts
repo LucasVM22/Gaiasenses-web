@@ -184,9 +184,9 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
   //     epsilon: DEFAULT_POSITION_EPSILON,
   //   },
   {
-    id: "gabriel-paraiso24",
-    label: "Map sound 24",
-    bundleFolder: "gabriel-paraiso24",
+    id: "gabriel-paraiso25",
+    label: "Map sound 25",
+    bundleFolder: "gabriel-paraiso25",
     activation: {
       moments: ["map"],
     },

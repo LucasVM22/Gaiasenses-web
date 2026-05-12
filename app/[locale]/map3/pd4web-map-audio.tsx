@@ -27,11 +27,10 @@
  *         sends lat/lng (and optionally speed) to named pd receivers via
  *         pd.sendFloat(). Clears the interval on unmount.
  *
- *  Effect #3 — Auto-resume playback (runs when isReady + preferredPlaying)
- *    └─ Calls pd.init() once to start the Web Audio context and the patch.
- *         Required by browsers: audio context must start from a user gesture,
- *         but once the user has clicked Play we persist the preference and can
- *         call init() automatically on subsequent mounts.
+ *  Effect #3 — (removed)
+ *    └─ We intentionally do NOT auto-call pd.init() on mount/rehydration.
+ *         Some Pd4Web builds require init to happen directly from a click
+ *         gesture, otherwise they warn and refuse toggle wiring.
  *
  *  Unmount
  *    └─ resetRuntime(): stops position polling, suspends audio, nulls pdRef,
@@ -87,7 +86,13 @@ type Pd4WebInstance = {
   /** Active pointer/touch state tracked by pd4web.gui.js DOM event handlers. */
   Touches?: Record<string | number, unknown>;
   /** Present in newer generated runtimes; binds patch/ui wiring before init(). */
-  openPatch?: (patchName: string) => void;
+  openPatch?: (
+    patchName: string,
+    options?: {
+      canvasId?: string;
+      soundToggleId?: string;
+    },
+  ) => void;
 };
 
 /** Shape of the Emscripten module factory exposed by the pd4web.js loader script. */
@@ -141,10 +146,6 @@ function angularDeltaDegrees(a: number, b: number): number {
   return ((b - a + 540) % 360) - 180;
 }
 
-function clampAbs(value: number, limit: number): number {
-  return Math.max(-limit, Math.min(limit, value));
-}
-
 export default function Pd4WebMapAudio({
   patch,
   mapRef,
@@ -164,8 +165,6 @@ export default function Pd4WebMapAudio({
   const positionTimerRef = useRef<number | null>(null);
   /** Last map center dispatched to the patch; used for epsilon filtering. */
   const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
-  /** Last map values actually sent to Pd after smoothing/slew limiting. */
-  const lastSentMapRef = useRef<{ lat: number; lng: number } | null>(null);
   /** performance.now() timestamp of the last dispatched position; used for speed calculation. */
   const lastPositionTimeRef = useRef<number | null>(null);
   /** Last BLE accel values sent to pd; used to suppress duplicate sends. */
@@ -186,11 +185,24 @@ export default function Pd4WebMapAudio({
   const [debugLongitudeValue, setDebugLongitudeValue] = useState<number | null>(
     null,
   );
+  const [debugLatitudeValue, setDebugLatitudeValue] = useState<number | null>(
+    null,
+  );
+  const [debugPositionLog, setDebugPositionLog] = useState<
+    Array<{
+      ts: number;
+      lat: number;
+      lng: number;
+      latReceiver: string | null;
+      lngReceiver: string | null;
+    }>
+  >([]);
 
   // Derive the URLs needed to inject and configure the Emscripten loader.
   const scriptId = getPd4WebScriptId(patch.id);
   const bundleBasePath = getPd4WebBundleBasePath(patch.bundleFolder);
   const scriptSrc = getPd4WebBundleScriptPath(patch.bundleFolder);
+  const soundToggleId = `map3-pd4web-audio-switch-${patch.id}`;
 
   // ---------------------------------------------------------------------------
   // Effect #1 — Script loading & Pd4Web instantiation
@@ -246,11 +258,12 @@ export default function Pd4WebMapAudio({
       initializedRef.current = false;
       toggleModeRef.current = null;
       lastPositionRef.current = null;
-      lastSentMapRef.current = null;
       lastPositionTimeRef.current = null;
       lastSentAccRef.current = null;
       lastSentCo2Ref.current = null;
       setDebugLongitudeValue(null);
+      setDebugLatitudeValue(null);
+      setDebugPositionLog([]);
       setIsPlaying(false);
       setIsReady(false);
       setIsLoading(true);
@@ -290,7 +303,9 @@ export default function Pd4WebMapAudio({
       // Newer Pd4Web builds require an explicit openPatch() call before init().
       // Keep this conditional so older bundles continue to work unchanged.
       if (typeof pdRef.current.openPatch === "function") {
-        pdRef.current.openPatch("index.pd");
+        pdRef.current.openPatch("index.pd", {
+          soundToggleId,
+        });
       }
 
       window.Pd4Web = pdRef.current;
@@ -346,7 +361,7 @@ export default function Pd4WebMapAudio({
       createdScriptRef.current = null;
       resetRuntime();
     };
-  }, [bundleBasePath, scriptId, scriptSrc]);
+  }, [bundleBasePath, scriptId, scriptSrc, soundToggleId]);
 
   // ---------------------------------------------------------------------------
   // Effect #2 — Map center + BLE sensor → pd receivers (position polling)
@@ -373,9 +388,6 @@ export default function Pd4WebMapAudio({
     const positionEpsilon = binding.epsilon ?? 0.0001;
     const positionPollMs = binding.pollMs ?? 100;
     const sensorEpsilon = 0.0001;
-    const mapSmoothingAlpha = 0.25;
-    const maxLongitudeStepPerTick = 6;
-    const maxLatitudeStepPerTick = 3;
 
     /**
      * Reads the current map center, applies epsilon filtering, and dispatches
@@ -394,8 +406,8 @@ export default function Pd4WebMapAudio({
       }
 
       const nextPosition = {
-        lat: clampLatitude(center.lat),
-        lng: normalizeLongitude(center.lng),
+        lat: center.lat,
+        lng: center.lng,
       };
       const lastPosition = lastPositionRef.current;
       const now = performance.now();
@@ -406,48 +418,29 @@ export default function Pd4WebMapAudio({
         Math.abs(lastPosition.lng - nextPosition.lng) >= positionEpsilon;
 
       if (hasPositionChanged) {
-        let nextLongitudeToSend = nextPosition.lng;
-        let nextLatitudeToSend = nextPosition.lat;
-
-        if (lastSentMapRef.current) {
-          const previousSent = lastSentMapRef.current;
-          const longitudeDelta = angularDeltaDegrees(
-            previousSent.lng,
-            nextPosition.lng,
-          );
-          const latitudeDelta = nextPosition.lat - previousSent.lat;
-
-          const slewedLongitude = normalizeLongitude(
-            previousSent.lng +
-              clampAbs(longitudeDelta, maxLongitudeStepPerTick),
-          );
-          const slewedLatitude = clampLatitude(
-            previousSent.lat + clampAbs(latitudeDelta, maxLatitudeStepPerTick),
-          );
-
-          nextLongitudeToSend = normalizeLongitude(
-            previousSent.lng +
-              angularDeltaDegrees(previousSent.lng, slewedLongitude) *
-                mapSmoothingAlpha,
-          );
-          nextLatitudeToSend = clampLatitude(
-            previousSent.lat +
-              (slewedLatitude - previousSent.lat) * mapSmoothingAlpha,
-          );
-        }
-
         binding.longitudeReceiver &&
-          pd.sendFloat(binding.longitudeReceiver, nextLongitudeToSend);
-        if (binding.longitudeReceiver === "rotacaoSite") {
-          setDebugLongitudeValue(nextLongitudeToSend);
+          pd.sendFloat(binding.longitudeReceiver, nextPosition.lng);
+        if (binding.longitudeReceiver) {
+          setDebugLongitudeValue(nextPosition.lng);
         }
         binding.latitudeReceiver &&
-          pd.sendFloat(binding.latitudeReceiver, nextLatitudeToSend);
+          pd.sendFloat(binding.latitudeReceiver, nextPosition.lat);
+        if (binding.latitudeReceiver) {
+          setDebugLatitudeValue(nextPosition.lat);
+        }
 
-        lastSentMapRef.current = {
-          lat: nextLatitudeToSend,
-          lng: nextLongitudeToSend,
-        };
+        if (binding.longitudeReceiver || binding.latitudeReceiver) {
+          setDebugPositionLog((prev) => {
+            const nextEntry = {
+              ts: Date.now(),
+              lng: nextPosition.lng,
+              lat: nextPosition.lat,
+              lngReceiver: binding.longitudeReceiver ?? null,
+              latReceiver: binding.latitudeReceiver ?? null,
+            };
+            return [nextEntry, ...prev].slice(0, 8);
+          });
+        }
       }
 
       const acc = sensorDataRef.current?.acc;
@@ -546,58 +539,15 @@ export default function Pd4WebMapAudio({
         positionTimerRef.current = null;
       }
     };
-  }, [isReady, isPlaying, mapRef, patch.binding, sensorDataRef, co2DataRef]);
-
-  // ---------------------------------------------------------------------------
-  // Effect #3 — Auto-resume playback
-  //
-  // When the patch is ready and the user's stored preference is "playing",
-  // automatically call pd.init() to start audio without requiring another click.
-  // This is safe because the preference is only set to true after an explicit
-  // user gesture (see handleToggle), satisfying browser autoplay policies.
-  // The `initializedRef` guard ensures init() is called at most once per
-  // component lifetime.
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    if (!isReady || !preferredPlaying || initializedRef.current) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const restorePlayback = async () => {
-      const pd = pdRef.current;
-      if (!pd) {
-        return;
-      }
-
-      setError(null);
-
-      try {
-        await pd.init();
-        if (cancelled) {
-          return;
-        }
-
-        initializedRef.current = true;
-        setIsPlaying(true);
-      } catch (err) {
-        if (cancelled) {
-          return;
-        }
-
-        setError(
-          err instanceof Error ? err.message : "Failed to restore audio",
-        );
-      }
-    };
-
-    restorePlayback();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isReady, preferredPlaying]);
+  }, [
+    isReady,
+    isPlaying,
+    mapRef,
+    patch.id,
+    patch.binding,
+    sensorDataRef,
+    co2DataRef,
+  ]);
 
   /**
    * Toggles audio after pd.init() has already been called.
@@ -669,6 +619,7 @@ export default function Pd4WebMapAudio({
   return (
     <div className="absolute left-4 bottom-4 z-20 flex flex-col gap-2 pointer-events-auto">
       <Button
+        id={soundToggleId}
         onClick={handleToggle}
         disabled={!isReady || isLoading}
         variant="secondary"
@@ -686,9 +637,39 @@ export default function Pd4WebMapAudio({
       ) : null}
       {patch.binding.type === "map-center" &&
       patch.binding.longitudeReceiver ? (
-        <div className="rounded bg-black/65 px-2 py-1 font-mono text-[10px] leading-none text-white shadow-sm">
-          {patch.binding.longitudeReceiver}:{" "}
-          {debugLongitudeValue?.toFixed(4) ?? "-"}
+        <div className="w-[20rem] space-y-1 rounded bg-black/65 px-2 py-2 font-mono text-[10px] leading-none text-white shadow-sm">
+          <div>
+            {patch.binding.longitudeReceiver}:{" "}
+            {debugLongitudeValue?.toFixed(4) ?? "-"}
+          </div>
+          {patch.binding.latitudeReceiver ? (
+            <div>
+              {patch.binding.latitudeReceiver}:{" "}
+              {debugLatitudeValue?.toFixed(4) ?? "-"}
+            </div>
+          ) : null}
+          <div className="mt-2 border-t border-white/20 pt-1 text-[9px] uppercase tracking-wide text-white/80">
+            recent sends
+          </div>
+          <div className="max-h-28 space-y-1 overflow-auto pr-1">
+            {debugPositionLog.length ? (
+              debugPositionLog.map((entry) => (
+                <div key={entry.ts} className="rounded bg-black/40 px-1.5 py-1">
+                  <div className="text-white/70">
+                    {new Date(entry.ts).toLocaleTimeString()}
+                  </div>
+                  <div>
+                    {entry.lngReceiver ?? "lng"}: {entry.lng.toFixed(4)}
+                  </div>
+                  <div>
+                    {entry.latReceiver ?? "lat"}: {entry.lat.toFixed(4)}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-white/70">No position messages yet.</div>
+            )}
+          </div>
         </div>
       ) : null}
     </div>
