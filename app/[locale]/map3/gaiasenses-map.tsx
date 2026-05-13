@@ -36,6 +36,7 @@ import {
 } from "./use-sensor-smoothing";
 import { ClimaData } from "./use-composition-queue";
 import { enabledCompositionKeys } from "./map-constants";
+import CompositionsInfo from "@/components/compositions/compositions-info";
 
 const MOTION_TUNING_STORAGE_KEY = "map3-motion-tuning-settings";
 
@@ -58,7 +59,13 @@ export default function GaiasensesMap({
   InfoButtonText,
   clima,
 }: GaiasensesMapProps) {
-  const isMapAudioActive = mode === "map";
+  const hasSharedPd4WebPatch =
+    composition !== null &&
+    Boolean(
+      CompositionsInfo[composition as keyof typeof CompositionsInfo]?.pd4web,
+    );
+  const isMapAudioActive = mode === "map" || hasSharedPd4WebPatch;
+  const isMapInputActive = mode === "map";
 
   const mapRef = useRef<MapRef>(null);
   const latestSensorDataRef = useRef<espResponse | null>(null);
@@ -234,6 +241,7 @@ export default function GaiasensesMap({
         composition={composition}
         mapRef={mapRef}
         active={isMapAudioActive}
+        mapInputActive={isMapInputActive}
       />
 
       {/*

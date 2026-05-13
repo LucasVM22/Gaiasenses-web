@@ -19,6 +19,7 @@ import {
 import { cookies } from "next/headers";
 import DataSender from "@/components/dataSender";
 import { Suspense } from "react";
+import { Pd4WebInstanceProvider } from "./pd4web-instance-context";
 
 function stringToBoolean(value: string | undefined): boolean {
   if (value === undefined) {
@@ -170,137 +171,139 @@ export default async function Page({ params, searchParams }: PageProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 grid-rows-1">
-      <div className="col-start-1 row-start-1 isolate">
-        <GaiasensesMap
-          initialLat={lat}
-          initialLng={lng}
-          mode={searchParams.mode === "player" ? "player" : "map"}
-          composition={composition}
-          InfoButtonText={t("infoButtonText")}
-          clima={{
-            windSpeed: speed,
-            humidity,
-            clouds: weatherData.clouds,
-            temperature: temp,
-            lightnings: lightningcount,
-            fireSpots: firecount,
-          }}
-        >
-          <Suspense
-            fallback={
-              <div>
-                <p>Loading...</p>
-              </div>
-            }
+    <Pd4WebInstanceProvider>
+      <div className="grid grid-cols-1 grid-rows-1">
+        <div className="col-start-1 row-start-1 isolate">
+          <GaiasensesMap
+            initialLat={lat}
+            initialLng={lng}
+            mode={searchParams.mode === "player" ? "player" : "map"}
+            composition={composition}
+            InfoButtonText={t("infoButtonText")}
+            clima={{
+              windSpeed: speed,
+              humidity,
+              clouds: weatherData.clouds,
+              temperature: temp,
+              lightnings: lightningcount,
+              fireSpots: firecount,
+            }}
           >
-            <PopupContent lat={lat} lng={lng} lang={params.locale}>
-              <div className="flex gap-1">
-                <Link href={{ query: newQuery }} className="w-full">
-                  <Button className="w-full capitalize" variant={"outline"}>
-                    {composition}
-                  </Button>
-                </Link>
-                <CompositionDropdown
-                  searchParams={searchParams}
-                ></CompositionDropdown>
-              </div>
-            </PopupContent>
-          </Suspense>
-        </GaiasensesMap>
-      </div>
-      <div className="col-start-1 row-start-1">
-        <TitleScreen
-          show={true}
-          title={t("title")}
-          subtitle={""}
-          titleButtonText={t("titleButtonText")}
-        ></TitleScreen>
-      </div>
-      <DataSender
-        isOpen={searchParams.mode === "player"}
-        composition={composition}
-        temp={temp}
-        speed={speed}
-        humidity={humidity}
-        lightningcount={lightningcount}
-        firecount={firecount}
-        date_timeplayed={date_timeplayed}
-        pinnedlocation={pinnedlocation}
-        userLocation={userLocation}
-      />
-      <CompositionModal
-        isOpen={searchParams.mode === "player" ? true : false}
-        closeButton={
-          <Link href={{ query: { ...newQuery, mode: "map" } }}>
-            <Button>Back</Button>
-          </Link>
-        }
-      >
-        {compositionComponent}
-      </CompositionModal>
-      <InfoModal
-        isOpen={isInfoOpen}
-        closeButton={
-          <Link href={{ query: { ...searchParams, info: false } }} replace>
-            X
-          </Link>
-        }
-      >
-        <div className="max-w-lg flex flex-col gap-4 pb-8 text-lg text-justify mx-auto">
-          <h1 className="text-5xl font-bold text-center py-12">GaiaSenses</h1>
-
-          <p>{t("aboutTextp1")}</p>
-
-          <p>{t("aboutTextp2")}</p>
-
-          <h2 className="text-2xl font-bold">{t("creditsText")}</h2>
-
-          <div>
-            <p className="font-bold">{t("ctiText")}</p>
-            <p className="italic">{t("discfText")}</p>
-          </div>
-
-          <div>
-            <p className="font-bold">{t("coordinatorText")}</p>
-            <p>Artemis Moroni</p>
-          </div>
-
-          <div>
-            <p className="font-bold">{t("development")}</p>
-            <p>Felipe Mammoli</p>
-            <p>Henrique Cazarim</p> <p>Lucas de Oliveira</p>
-            <p>Álvaro Costa</p> <p>Pedro Trama</p> <p>Lucas Mielle</p>
-          </div>
-
-          <div>
-            <p className="font-bold">{t("sound")}</p>
-            <p>Gabriel D&apos;Incao</p> <p>Laureana Stelmastchuk</p>
-          </div>
-
-          <div>
-            <p className="font-bold">{t("acknowledgement")}</p>
-            <p>{t("acknowledgementText")}</p>
-          </div>
-          <div>
-            <p className="font-bold">{t("compositionCredits")}</p>
-            {Object.entries(CompositionsInfo).map((value, index) => (
-              <div className="flex" key={index}>
-                <Link
-                  className={`hover:underline ${
-                    value[1].openProcessingLink ? "" : "pointer-events-none"
-                  }`}
-                  href={value[1].openProcessingLink ?? ""}
-                  aria-disabled={value[1].openProcessingLink ? false : true}
-                  target="blank"
-                >
-                  {value[1].name}, <span>{value[1].author}</span>
-                </Link>
-              </div>
-            ))}
-          </div>
+            <Suspense
+              fallback={
+                <div>
+                  <p>Loading...</p>
+                </div>
+              }
+            >
+              <PopupContent lat={lat} lng={lng} lang={params.locale}>
+                <div className="flex gap-1">
+                  <Link href={{ query: newQuery }} className="w-full">
+                    <Button className="w-full capitalize" variant={"outline"}>
+                      {composition}
+                    </Button>
+                  </Link>
+                  <CompositionDropdown
+                    searchParams={searchParams}
+                  ></CompositionDropdown>
+                </div>
+              </PopupContent>
+            </Suspense>
+          </GaiasensesMap>
         </div>
-      </InfoModal>
-    </div>
+        <div className="col-start-1 row-start-1">
+          <TitleScreen
+            show={true}
+            title={t("title")}
+            subtitle={""}
+            titleButtonText={t("titleButtonText")}
+          ></TitleScreen>
+        </div>
+        <DataSender
+          isOpen={searchParams.mode === "player"}
+          composition={composition}
+          temp={temp}
+          speed={speed}
+          humidity={humidity}
+          lightningcount={lightningcount}
+          firecount={firecount}
+          date_timeplayed={date_timeplayed}
+          pinnedlocation={pinnedlocation}
+          userLocation={userLocation}
+        />
+        <CompositionModal
+          isOpen={searchParams.mode === "player" ? true : false}
+          closeButton={
+            <Link href={{ query: { ...newQuery, mode: "map" } }}>
+              <Button>Back</Button>
+            </Link>
+          }
+        >
+          {compositionComponent}
+        </CompositionModal>
+        <InfoModal
+          isOpen={isInfoOpen}
+          closeButton={
+            <Link href={{ query: { ...searchParams, info: false } }} replace>
+              X
+            </Link>
+          }
+        >
+          <div className="max-w-lg flex flex-col gap-4 pb-8 text-lg text-justify mx-auto">
+            <h1 className="text-5xl font-bold text-center py-12">GaiaSenses</h1>
+
+            <p>{t("aboutTextp1")}</p>
+
+            <p>{t("aboutTextp2")}</p>
+
+            <h2 className="text-2xl font-bold">{t("creditsText")}</h2>
+
+            <div>
+              <p className="font-bold">{t("ctiText")}</p>
+              <p className="italic">{t("discfText")}</p>
+            </div>
+
+            <div>
+              <p className="font-bold">{t("coordinatorText")}</p>
+              <p>Artemis Moroni</p>
+            </div>
+
+            <div>
+              <p className="font-bold">{t("development")}</p>
+              <p>Felipe Mammoli</p>
+              <p>Henrique Cazarim</p> <p>Lucas de Oliveira</p>
+              <p>Álvaro Costa</p> <p>Pedro Trama</p> <p>Lucas Mielle</p>
+            </div>
+
+            <div>
+              <p className="font-bold">{t("sound")}</p>
+              <p>Gabriel D&apos;Incao</p> <p>Laureana Stelmastchuk</p>
+            </div>
+
+            <div>
+              <p className="font-bold">{t("acknowledgement")}</p>
+              <p>{t("acknowledgementText")}</p>
+            </div>
+            <div>
+              <p className="font-bold">{t("compositionCredits")}</p>
+              {Object.entries(CompositionsInfo).map((value, index) => (
+                <div className="flex" key={index}>
+                  <Link
+                    className={`hover:underline ${
+                      value[1].openProcessingLink ? "" : "pointer-events-none"
+                    }`}
+                    href={value[1].openProcessingLink ?? ""}
+                    aria-disabled={value[1].openProcessingLink ? false : true}
+                    target="blank"
+                  >
+                    {value[1].name}, <span>{value[1].author}</span>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </InfoModal>
+      </div>
+    </Pd4WebInstanceProvider>
   );
 }

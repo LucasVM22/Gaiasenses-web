@@ -16,7 +16,6 @@ export type LightningTreesProps = {
 
 export default async function LightningTrees(props: LightningTreesProps) {
   let lightningCount = props.lightningCount ?? 0;
-  const packageName = "/humansparks/pd4web.data";
   try {
     if (props.today) {
       const data = await getLightning(props.lat, props.lon, 100);
@@ -34,6 +33,9 @@ export default async function LightningTrees(props: LightningTreesProps) {
         key={refreshKey}
         lightningCount={lightningCount}
         play={props.play}
+        latitudeReceiver="lati"
+        longitudeReceiver="rotacaoSite"
+        pollFrequencyMs={100}
       />
       <CompositionControls play={props.play} />
       {<DebugPanel data={[{ lightningCount }]} />}

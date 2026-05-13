@@ -3,8 +3,9 @@
 import type { P5CanvasInstance, SketchProps } from "@p5-wrapper/react";
 //@ts-ignore this is generating require calls, should look into that
 import { NextReactP5Wrapper } from "@p5-wrapper/next";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { usePd4WebInstance } from "@/app/[locale]/map3/pd4web-instance-context";
 
 export type CurvesSketchProps = {
   rain: number;
@@ -17,6 +18,14 @@ const FPS_MAX = 30;
 
 const CRITICAL_RAIN = 10;
 const CRITICAL_TEMP = 35;
+
+function randomLatitude() {
+  return Math.random() * 180 - 90;
+}
+
+function randomLongitude() {
+  return Math.random() * 360 - 180;
+}
 
 function sketch(p5: P5CanvasInstance<SketchProps & CurvesSketchProps>) {
   // inspired by: https://openprocessing.org/sketch/1176431
@@ -66,12 +75,17 @@ function sketch(p5: P5CanvasInstance<SketchProps & CurvesSketchProps>) {
       p5.random(width),
       p5.random(width),
       p5.random(width),
-      height
+      height,
     );
   };
 }
 
+const latitudeReceiver = "lati";
+const longitudeReceiver = "rotacaoSite";
+const pollFrequencyMs = 1000;
+
 export default function CurvesSketch(initialProps: CurvesSketchProps) {
+  const { pdRef } = usePd4WebInstance();
   const searchParams = useSearchParams();
 
   // ler params e converter para número quando existirem
@@ -81,7 +95,7 @@ export default function CurvesSketch(initialProps: CurvesSketchProps) {
 
   const rain = useMemo(
     () => (urlRain !== null ? Number(urlRain) : initialProps.rain),
-    [urlRain, initialProps.rain]
+    [urlRain, initialProps.rain],
   );
 
   const temperature = useMemo(
@@ -89,13 +103,36 @@ export default function CurvesSketch(initialProps: CurvesSketchProps) {
       urlTemperature !== null
         ? Number(urlTemperature)
         : initialProps.temperature,
-    [urlTemperature, initialProps.temperature]
+    [urlTemperature, initialProps.temperature],
   );
 
   const play =
     urlPlay !== null
       ? urlPlay === "true" || urlPlay === "1"
       : initialProps.play;
+
+  useEffect(() => {
+    if (!play) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      const pd = pdRef.current;
+      if (!pd) {
+        return;
+      }
+
+      const lat = randomLatitude();
+      const lon = randomLongitude();
+
+      pd.sendFloat(latitudeReceiver, lat);
+      pd.sendFloat(longitudeReceiver, lon);
+    }, pollFrequencyMs);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [pdRef, play]);
 
   // passa os valores numéricos ao wrapper p5 — NextReactP5Wrapper chamará updateWithProps internamente
   return (

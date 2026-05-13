@@ -6,6 +6,7 @@ import type { MapRef } from "react-map-gl";
 
 import type { Map3Pd4WebMoment } from "./pd4web-patches";
 import { resolveMap3Pd4WebPatch } from "./pd4web-patches";
+import { usePd4WebInstance } from "./pd4web-instance-context";
 
 type Pd4WebModuleOptions = {
   wasmBinary: ArrayBuffer;
@@ -38,6 +39,7 @@ type Pd4WebAudioProps = {
   composition: string | null;
   mapRef: RefObject<MapRef | null>;
   active?: boolean;
+  mapInputActive?: boolean;
 };
 
 function logPd4Web(event: string, details?: Record<string, unknown>) {
@@ -206,7 +208,9 @@ export default function Pd4WebAudio({
   composition,
   mapRef,
   active = true,
+  mapInputActive = true,
 }: Pd4WebAudioProps) {
+  const { setPdInstance } = usePd4WebInstance();
   const patch = resolveMap3Pd4WebPatch({ moment, composition });
   const pdRef = useRef<Pd4WebGlobal | null>(null);
   const lastPatchIdRef = useRef<string | null>(null);
@@ -260,6 +264,7 @@ export default function Pd4WebAudio({
         hasPreviousPatch: Boolean(previousPatchId),
       });
       pdRef.current = null;
+      setPdInstance(null);
       isAudioPlayingRef.current = false;
       pausedByInactiveModeRef.current = false;
       setProgress(0);
@@ -358,6 +363,7 @@ export default function Pd4WebAudio({
         }
 
         pdRef.current = pd;
+        setPdInstance(pd);
         isAudioPlayingRef.current = isPd4WebPlaying();
         logPd4Web("instance-attached", {
           patchId: patch.id,
@@ -400,9 +406,10 @@ export default function Pd4WebAudio({
         nativeSwitchPlaying: isPd4WebPlaying(),
       });
       pdRef.current = null;
+      setPdInstance(null);
       setIsLoaded(false);
     };
-  }, [patch]);
+  }, [patch, setPdInstance]);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -499,12 +506,13 @@ export default function Pd4WebAudio({
   }, [active, isLoaded, patch?.id]);
 
   useEffect(() => {
-    if (!patch || !isLoaded || !active) {
+    if (!patch || !isLoaded || !active || !mapInputActive) {
       logPd4Web("polling-skipped", {
         patchId: patch?.id ?? null,
         hasPatch: Boolean(patch),
         isLoaded,
         active,
+        mapInputActive,
       });
       return;
     }
@@ -563,7 +571,7 @@ export default function Pd4WebAudio({
       });
       window.clearInterval(intervalId);
     };
-  }, [active, isLoaded, mapRef, patch]);
+  }, [active, isLoaded, mapInputActive, mapRef, patch]);
 
   const showMapAudioUi = Boolean(patch) && moment === "map";
 

@@ -3,12 +3,27 @@
 import type { P5CanvasInstance, SketchProps } from "@p5-wrapper/react";
 //@ts-ignore this is generating require calls, should look into that
 import { NextReactP5Wrapper } from "@p5-wrapper/next";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 
 export type LightningTreesSketchProps = {
   lightningCount: number;
   play: boolean;
+  pollFrequencyMs?: number;
+  latitudeReceiver?: string;
+  longitudeReceiver?: string;
+};
+
+function randomLatitude() {
+  return Math.random() * 180 - 90;
+}
+
+function randomLongitude() {
+  return Math.random() * 360 - 180;
+}
+
+type Pd4WebFloatSender = {
+  sendFloat: (name: string, n: number) => boolean;
 };
 
 function sketch(p5: P5CanvasInstance<SketchProps & LightningTreesSketchProps>) {
@@ -65,11 +80,13 @@ function sketch(p5: P5CanvasInstance<SketchProps & LightningTreesSketchProps>) {
       let j = p5.round(p.x / w);
       let i = p5.round(p.y / w);
       let pos = p5.createVector(p.x, p.y);
-      grid[i][j] = pos;
-      active.push({
-        pos: pos,
-        color: colors[n],
-      });
+      if (grid[i] && grid[i][j]) {
+        grid[i][j] = pos;
+        active.push({
+          pos: pos,
+          color: colors[n],
+        });
+      }
     }
   };
 
@@ -171,26 +188,73 @@ function sketch(p5: P5CanvasInstance<SketchProps & LightningTreesSketchProps>) {
 }
 
 export default function LightningTreesSketch(
-  initialProps: LightningTreesSketchProps
+  initialProps: LightningTreesSketchProps,
 ) {
   const searchParams = useSearchParams();
 
   // ler params e converter para número quando existirem
   const urlLightningCount = searchParams?.get("lightningCount");
   const urlPlay = searchParams?.get("play");
+  const urlPollMs = searchParams?.get("pollMs");
+  const urlLatitudeReceiver = searchParams?.get("latReceiver");
+  const urlLongitudeReceiver = searchParams?.get("lonReceiver");
 
   const lightningCount = useMemo(
     () =>
       urlLightningCount !== null
         ? Number(urlLightningCount)
         : initialProps.lightningCount,
-    [urlLightningCount, initialProps.lightningCount]
+    [urlLightningCount, initialProps.lightningCount],
   );
 
   const play =
     urlPlay !== null
       ? urlPlay === "true" || urlPlay === "1"
       : initialProps.play;
+
+  const pollFrequencyMs = useMemo(() => {
+    if (urlPollMs !== null) {
+      const parsed = Number(urlPollMs);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return initialProps.pollFrequencyMs ?? 1000;
+  }, [initialProps.pollFrequencyMs, urlPollMs]);
+
+  const latitudeReceiver =
+    urlLatitudeReceiver ?? initialProps.latitudeReceiver ?? "latitude";
+  const longitudeReceiver =
+    urlLongitudeReceiver ?? initialProps.longitudeReceiver ?? "longitude";
+
+  useEffect(() => {
+    if (!play) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      const pd = (
+        globalThis as typeof globalThis & { Pd4Web?: Pd4WebFloatSender }
+      ).Pd4Web;
+      if (!pd) {
+        return;
+      }
+
+      const lat = randomLatitude();
+      const lon = randomLongitude();
+      console.log(
+        `Sending to Pd4Web - ${latitudeReceiver}: ${lat}, ${longitudeReceiver}: ${lon}`,
+      );
+
+      pd.sendFloat(latitudeReceiver, lat);
+      pd.sendFloat(longitudeReceiver, lon);
+    }, pollFrequencyMs);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [latitudeReceiver, longitudeReceiver, play, pollFrequencyMs]);
 
   // passa os valores numéricos ao wrapper p5 — NextReactP5Wrapper chamará updateWithProps internamente
   return (

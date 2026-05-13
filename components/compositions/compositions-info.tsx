@@ -77,6 +77,7 @@ export type CompositionInfo = {
   thumb: string;
   author?: string;
   openProcessingLink?: string;
+  pd4web?: boolean;
 };
 
 export type CompositionsInfoType = {
@@ -128,6 +129,7 @@ const CompositionsInfo: CompositionsInfoType = {
     thumb: "curves.png",
     openProcessingLink: "https://openprocessing.org/sketch/1176431",
     author: "Pedro Alexis Mendoza Llanos ",
+    pd4web: true,
   },
   chaosTree: {
     name: "chaosTree",

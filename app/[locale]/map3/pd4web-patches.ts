@@ -188,7 +188,9 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
     label: "Map sound 27",
     bundleFolder: "paraiso27",
     activation: {
-      moments: ["map"],
+      // Keep this patch addressable in player mode too. Gating pause/resume is
+      // handled in GaiasensesMap via the composition's `pd4web` flag.
+      moments: ["map", "player"],
     },
     binding: {
       type: "map-center",
