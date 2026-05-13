@@ -15,9 +15,9 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useSearchParams } from "next/navigation";
 
 import type { espCo2Response, espResponse } from "./ble-control";
+import type { Map3Pd4WebMoment } from "./pd4web-patches";
 
 import InfoButton from "./info-button";
 import NotificationDialog from "./notifications-dialog";
@@ -43,6 +43,8 @@ type GaiasensesMapProps = {
   children: ReactNode;
   initialLat: number;
   initialLng: number;
+  mode: Map3Pd4WebMoment;
+  composition: string | null;
   InfoButtonText: string;
   clima: ClimaData;
 };
@@ -51,11 +53,12 @@ export default function GaiasensesMap({
   children,
   initialLat,
   initialLng,
+  mode,
+  composition,
   InfoButtonText,
   clima,
 }: GaiasensesMapProps) {
-  const searchParams = useSearchParams();
-  const isMapAudioActive = searchParams.get("mode") !== "player";
+  const isMapAudioActive = mode === "map";
 
   const mapRef = useRef<MapRef>(null);
   const latestSensorDataRef = useRef<espResponse | null>(null);
@@ -227,8 +230,8 @@ export default function GaiasensesMap({
       </Map>
 
       <Pd4WebAudio
-        moment="map"
-        composition={null}
+        moment={mode}
+        composition={composition}
         mapRef={mapRef}
         active={isMapAudioActive}
       />

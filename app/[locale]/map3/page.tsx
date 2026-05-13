@@ -40,7 +40,7 @@ function stringToBoolean(value: string | undefined): boolean {
 }
 
 const compositionOptions = Object.entries(CompositionsInfo).map(
-  (item) => item[0]
+  (item) => item[0],
 );
 // const compositionOptions = [
 //   "zigzag",
@@ -175,6 +175,8 @@ export default async function Page({ params, searchParams }: PageProps) {
         <GaiasensesMap
           initialLat={lat}
           initialLng={lng}
+          mode={searchParams.mode === "player" ? "player" : "map"}
+          composition={composition}
           InfoButtonText={t("infoButtonText")}
           clima={{
             windSpeed: speed,

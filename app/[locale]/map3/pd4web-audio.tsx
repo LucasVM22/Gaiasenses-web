@@ -28,6 +28,8 @@ declare global {
   interface Window {
     __pd4webScriptLoads?: Record<string, Promise<HTMLScriptElement>>;
     __pd4webInstances?: Record<string, Pd4WebInstanceRecord>;
+    __pd4webPausedByMode?: Record<string, boolean>;
+    Pd4WebAudioContext?: AudioContext;
   }
 }
 
@@ -37,6 +39,10 @@ type Pd4WebAudioProps = {
   mapRef: RefObject<MapRef | null>;
   active?: boolean;
 };
+
+function logPd4Web(event: string, details?: Record<string, unknown>) {
+  console.log("[map3/pd4web]", event, details ?? {});
+}
 
 function appendScriptOnce(id: string, src: string): Promise<HTMLScriptElement> {
   const activeLoads = (window.__pd4webScriptLoads ??= {});
@@ -128,9 +134,71 @@ function getPd4WebInstanceRecord(key: string): Pd4WebInstanceRecord {
   return (registry[key] ??= {});
 }
 
+function getPd4WebPausedByModeRegistry(): Record<string, boolean> {
+  return (window.__pd4webPausedByMode ??= {});
+}
+
 function isPd4WebPlaying(): boolean {
   const switchContainer = document.getElementById("Pd4WebAudioSwitch");
   return switchContainer?.classList.contains("pulse-icon") ?? false;
+}
+
+function clickPd4WebSwitch(): boolean {
+  const switchContainer = document.getElementById("Pd4WebAudioSwitch");
+  if (!(switchContainer instanceof HTMLElement)) {
+    return false;
+  }
+  switchContainer.click();
+  return true;
+}
+
+function forcePd4WebSwitchOff(): boolean {
+  if (!clickPd4WebSwitch()) {
+    return false;
+  }
+
+  // If first click turned it on (or left it on), click once more to guarantee off.
+  if (isPd4WebPlaying()) {
+    clickPd4WebSwitch();
+  }
+
+  return true;
+}
+
+function suspendPd4WebAudioContext(): boolean {
+  const ctx = window.Pd4WebAudioContext;
+  if (!ctx) {
+    return false;
+  }
+
+  if (ctx.state === "suspended") {
+    return true;
+  }
+
+  if (ctx.state === "running") {
+    void ctx.suspend();
+    return true;
+  }
+
+  return false;
+}
+
+function resumePd4WebAudioContext(): boolean {
+  const ctx = window.Pd4WebAudioContext;
+  if (!ctx) {
+    return false;
+  }
+
+  if (ctx.state === "running") {
+    return true;
+  }
+
+  if (ctx.state === "suspended") {
+    void ctx.resume();
+    return true;
+  }
+
+  return false;
 }
 
 export default function Pd4WebAudio({
@@ -141,13 +209,56 @@ export default function Pd4WebAudio({
 }: Pd4WebAudioProps) {
   const patch = resolveMap3Pd4WebPatch({ moment, composition });
   const pdRef = useRef<Pd4WebGlobal | null>(null);
+  const lastPatchIdRef = useRef<string | null>(null);
   const isAudioPlayingRef = useRef(false);
   const pausedByInactiveModeRef = useRef(false);
   const [progress, setProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    logPd4Web("render-state", {
+      patchId: patch?.id ?? null,
+      moment,
+      composition,
+      active,
+      isLoaded,
+    });
+  }, [active, composition, isLoaded, moment, patch?.id]);
+
+  useEffect(() => {
     if (!patch) {
+      const previousPatchId = lastPatchIdRef.current;
+      const pausedByModeRegistry = getPd4WebPausedByModeRegistry();
+
+      if (previousPatchId) {
+        const shouldPause = isPd4WebPlaying();
+        logPd4Web("patch-deactivated", {
+          previousPatchId,
+          nativeSwitchPlaying: shouldPause,
+          audioContextState: window.Pd4WebAudioContext?.state ?? "missing",
+        });
+
+        const suspended = suspendPd4WebAudioContext();
+        const switchToggled = forcePd4WebSwitchOff();
+        if (suspended || switchToggled) {
+          pausedByModeRegistry[previousPatchId] = true;
+          pausedByInactiveModeRef.current = true;
+          isAudioPlayingRef.current = false;
+          logPd4Web("patch-deactivated-paused", {
+            previousPatchId,
+            suspended,
+            switchToggled,
+            nativeSwitchPlayingBefore: shouldPause,
+            nativeSwitchPlayingAfterClick: isPd4WebPlaying(),
+            audioContextStateAfter:
+              window.Pd4WebAudioContext?.state ?? "missing",
+          });
+        }
+      }
+
+      logPd4Web("no-patch", {
+        hasPreviousPatch: Boolean(previousPatchId),
+      });
       pdRef.current = null;
       isAudioPlayingRef.current = false;
       pausedByInactiveModeRef.current = false;
@@ -159,26 +270,49 @@ export default function Pd4WebAudio({
     let cancelled = false;
     const bundleBasePath = `/${patch.bundleFolder}/`;
     const instanceRecord = getPd4WebInstanceRecord(patch.id);
+    const pausedByModeRegistry = getPd4WebPausedByModeRegistry();
+    lastPatchIdRef.current = patch.id;
+
+    logPd4Web("effect-start", {
+      patchId: patch.id,
+      bundleFolder: patch.bundleFolder,
+      hasInstance: Boolean(instanceRecord.instance),
+      hasLoadPromise: Boolean(instanceRecord.loadPromise),
+    });
 
     const run = async () => {
       try {
         setProgress(0);
         setIsLoaded(false);
         if (!instanceRecord.loadPromise) {
+          logPd4Web("instance-create-begin", {
+            patchId: patch.id,
+            bundleFolder: patch.bundleFolder,
+          });
           instanceRecord.loadPromise = (async () => {
             await appendScriptOnce(
               `pd4web-threads-${patch.bundleFolder}`,
               `/${patch.bundleFolder}/pd4web.threads.js`,
             );
+            logPd4Web("threads-script-ready", {
+              patchId: patch.id,
+            });
             await appendScriptOnce(
               `pd4web-main-${patch.bundleFolder}`,
               `/${patch.bundleFolder}/pd4web.js`,
             );
+            logPd4Web("main-script-ready", {
+              patchId: patch.id,
+            });
 
             const wasmBinary = await fetchWasm(
               `/${patch.bundleFolder}/pd4web.wasm`,
               setProgress,
             );
+            logPd4Web("wasm-ready", {
+              patchId: patch.id,
+              byteLength: wasmBinary.byteLength,
+            });
 
             const moduleFactory = (
               globalThis as { Pd4WebModule?: Pd4WebModuleFactory }
@@ -199,19 +333,57 @@ export default function Pd4WebAudio({
               soundToggleId: "Pd4WebAudioSwitch",
             });
 
+            logPd4Web("instance-create-complete", {
+              patchId: patch.id,
+              openedPatch: "index.pd",
+            });
+
             instanceRecord.instance = pd;
             return pd;
           })();
+        } else {
+          logPd4Web("instance-reuse-load-promise", {
+            patchId: patch.id,
+            hasInstance: Boolean(instanceRecord.instance),
+          });
         }
 
         const pd = await instanceRecord.loadPromise;
 
         if (cancelled) {
+          logPd4Web("effect-cancelled-after-load", {
+            patchId: patch.id,
+          });
           return;
         }
 
         pdRef.current = pd;
         isAudioPlayingRef.current = isPd4WebPlaying();
+        logPd4Web("instance-attached", {
+          patchId: patch.id,
+          nativeSwitchPlaying: isAudioPlayingRef.current,
+          pausedByMode: pausedByModeRegistry[patch.id] ?? false,
+        });
+
+        if (pausedByModeRegistry[patch.id]) {
+          const resumed = resumePd4WebAudioContext();
+          if (!resumed && !isPd4WebPlaying() && clickPd4WebSwitch()) {
+            logPd4Web("resume-after-mode-deactivation-clicked", {
+              patchId: patch.id,
+              nativeSwitchPlayingAfterClick: isPd4WebPlaying(),
+            });
+          }
+          logPd4Web("resume-after-mode-deactivation", {
+            patchId: patch.id,
+            resumed,
+            audioContextStateAfter:
+              window.Pd4WebAudioContext?.state ?? "missing",
+          });
+          pausedByModeRegistry[patch.id] = false;
+          pausedByInactiveModeRef.current = false;
+          isAudioPlayingRef.current = isPd4WebPlaying();
+        }
+
         setProgress(100);
         setIsLoaded(true);
       } catch (error) {
@@ -223,6 +395,10 @@ export default function Pd4WebAudio({
 
     return () => {
       cancelled = true;
+      logPd4Web("effect-cleanup", {
+        patchId: patch.id,
+        nativeSwitchPlaying: isPd4WebPlaying(),
+      });
       pdRef.current = null;
       setIsLoaded(false);
     };
@@ -240,6 +416,13 @@ export default function Pd4WebAudio({
 
     const syncPlayingState = () => {
       isAudioPlayingRef.current = isPd4WebPlaying();
+      logPd4Web("native-switch-state", {
+        patchId: patch?.id ?? null,
+        active,
+        isLoaded,
+        nativeSwitchPlaying: isAudioPlayingRef.current,
+        className: switchContainer.className,
+      });
     };
 
     syncPlayingState();
@@ -256,33 +439,73 @@ export default function Pd4WebAudio({
     return () => {
       observer.disconnect();
     };
-  }, [isLoaded]);
+  }, [active, isLoaded, patch?.id]);
 
   useEffect(() => {
-    const pd = pdRef.current;
-    if (!isLoaded || !pd) {
+    if (!isLoaded || !pdRef.current) {
       return;
     }
 
     const isCurrentlyPlaying = isPd4WebPlaying() || isAudioPlayingRef.current;
     isAudioPlayingRef.current = isCurrentlyPlaying;
 
+    logPd4Web("mode-transition-check", {
+      patchId: patch?.id ?? null,
+      active,
+      isLoaded,
+      nativeSwitchPlaying: isPd4WebPlaying(),
+      refPlaying: isAudioPlayingRef.current,
+      pausedByInactiveMode: pausedByInactiveModeRef.current,
+    });
+
     if (!active && isCurrentlyPlaying) {
-      pd.toggleAudio();
-      isAudioPlayingRef.current = false;
-      pausedByInactiveModeRef.current = true;
+      logPd4Web("pause-on-player-entry-attempt", {
+        patchId: patch?.id ?? null,
+        nativeSwitchPlayingBefore: isPd4WebPlaying(),
+      });
+      if (clickPd4WebSwitch()) {
+        isAudioPlayingRef.current = false;
+        pausedByInactiveModeRef.current = true;
+        logPd4Web("pause-on-player-entry-clicked", {
+          patchId: patch?.id ?? null,
+          nativeSwitchPlayingAfterClick: isPd4WebPlaying(),
+        });
+      } else {
+        logPd4Web("pause-on-player-entry-missing-switch", {
+          patchId: patch?.id ?? null,
+        });
+      }
       return;
     }
 
     if (active && pausedByInactiveModeRef.current) {
-      pd.toggleAudio();
-      isAudioPlayingRef.current = true;
-      pausedByInactiveModeRef.current = false;
+      logPd4Web("resume-on-map-return-attempt", {
+        patchId: patch?.id ?? null,
+        nativeSwitchPlayingBefore: isPd4WebPlaying(),
+      });
+      if (clickPd4WebSwitch()) {
+        isAudioPlayingRef.current = true;
+        pausedByInactiveModeRef.current = false;
+        logPd4Web("resume-on-map-return-clicked", {
+          patchId: patch?.id ?? null,
+          nativeSwitchPlayingAfterClick: isPd4WebPlaying(),
+        });
+      } else {
+        logPd4Web("resume-on-map-return-missing-switch", {
+          patchId: patch?.id ?? null,
+        });
+      }
     }
-  }, [active, isLoaded]);
+  }, [active, isLoaded, patch?.id]);
 
   useEffect(() => {
-    if (!patch || !isLoaded) {
+    if (!patch || !isLoaded || !active) {
+      logPd4Web("polling-skipped", {
+        patchId: patch?.id ?? null,
+        hasPatch: Boolean(patch),
+        isLoaded,
+        active,
+      });
       return;
     }
 
@@ -328,23 +551,30 @@ export default function Pd4WebAudio({
       }
     }, pollMs);
 
+    logPd4Web("polling-start", {
+      patchId: patch.id,
+      pollMs,
+      epsilon,
+    });
+
     return () => {
+      logPd4Web("polling-stop", {
+        patchId: patch.id,
+      });
       window.clearInterval(intervalId);
     };
-  }, [isLoaded, mapRef, patch]);
+  }, [active, isLoaded, mapRef, patch]);
 
-  if (!patch) {
-    return null;
-  }
+  const showMapAudioUi = Boolean(patch) && moment === "map";
 
   return (
     <>
       <span
         id="Pd4WebAudioSwitch"
-        className="absolute top-4 left-4 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm"
+        className={`absolute top-4 left-4 z-20 h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm ${showMapAudioUi ? "flex" : "hidden"}`}
       />
       <canvas id="Pd4WebCanvas" tabIndex={0} className="hidden" />
-      {progress < 100 && (
+      {showMapAudioUi && progress < 100 && (
         <div className="absolute top-4 left-1/2 z-20 w-[min(320px,calc(100vw-2rem))] -translate-x-1/2 rounded-lg bg-white/90 px-3 py-2 shadow-lg backdrop-blur-sm">
           <div className="text-xs text-slate-700">
             Downloading WASM... {progress}%
