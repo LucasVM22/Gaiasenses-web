@@ -184,9 +184,9 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
   //     epsilon: DEFAULT_POSITION_EPSILON,
   //   },
   {
-    id: "paraiso26",
-    label: "Map sound 26",
-    bundleFolder: "paraiso26",
+    id: "paraiso27",
+    label: "Map sound 27",
+    bundleFolder: "paraiso27",
     activation: {
       moments: ["map"],
     },
@@ -201,22 +201,6 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
       pollMs: 32,
       epsilon: 0.0001,
     },
-    // {
-    //   id: "testeBS",
-    //   label: "Map sound testeBS",
-    //   bundleFolder: "testeBS",
-    //   activation: {
-    //     moments: ["map"],
-    //   },
-    //   binding: {
-    //     type: "map-center",
-    //     // latitudeReceiver: "lati",
-    //     // longitudeReceiver: "rotacaoSite",
-    //     // accXReceiver: "input_accX",
-    //     // accYReceiver: "input_accY",
-    //     // accZReceiver: "input_accZ",
-    //     // co2Receiver: "input_co2",
-    //   },
   },
 ] as const;
 
