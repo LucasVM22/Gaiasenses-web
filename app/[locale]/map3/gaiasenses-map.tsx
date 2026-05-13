@@ -15,6 +15,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 
 import type { espCo2Response, espResponse } from "./ble-control";
 
@@ -24,7 +25,7 @@ import BLEControl from "./ble-control";
 import AutoMove from "./auto-move";
 import CoordinateDisplay from "./coordinate-display";
 import MotionTuningPanel from "./motion-tuning-panel";
-import Pd4WebMapAudioManager from "./pd4web-map-audio-manager";
+import Pd4WebAudio from "./pd4web-audio";
 import { useCompositionQueue } from "./use-composition-queue";
 import { useMapInteractions } from "./use-map-interactions";
 import { useAutoMode } from "./use-auto-mode";
@@ -53,6 +54,9 @@ export default function GaiasensesMap({
   InfoButtonText,
   clima,
 }: GaiasensesMapProps) {
+  const searchParams = useSearchParams();
+  const isMapAudioActive = searchParams.get("mode") !== "player";
+
   const mapRef = useRef<MapRef>(null);
   const latestSensorDataRef = useRef<espResponse | null>(null);
   const latestCo2DataRef = useRef<espCo2Response | null>(null);
@@ -139,11 +143,6 @@ export default function GaiasensesMap({
         onReset={() => setMotionTuning(DEFAULT_MOTION_TUNING_SETTINGS)}
         onRecalibrate={recalibrateSensor}
       />
-      <Pd4WebMapAudioManager
-        mapRef={mapRef}
-        sensorDataRef={latestSensorDataRef}
-        co2DataRef={latestCo2DataRef}
-      />
       <div>
         <AnimatePresence>
           {false && (
@@ -226,6 +225,13 @@ export default function GaiasensesMap({
           </Popup>
         )}
       </Map>
+
+      <Pd4WebAudio
+        moment="map"
+        composition={null}
+        mapRef={mapRef}
+        active={isMapAudioActive}
+      />
 
       {/*
         CSS-centered pin — always at the visual center of the map canvas.

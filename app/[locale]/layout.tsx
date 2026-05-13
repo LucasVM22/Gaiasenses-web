@@ -1,7 +1,6 @@
 import "../globals.css";
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
-import RegisterPd4WebSW from "@/components/register-pd4web-sw";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { NextIntlClientProvider, useMessages } from "next-intl";
@@ -41,7 +40,6 @@ export default function LocaleLayout({
         >
         </ThemeProvider> */}
         <NextIntlClientProvider locale={locale} messages={msg}>
-          <RegisterPd4WebSW />
           {children}
         </NextIntlClientProvider>
         <Analytics />
