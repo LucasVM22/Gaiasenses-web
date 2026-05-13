@@ -35,7 +35,7 @@ export default async function LightningTrees(props: LightningTreesProps) {
         lightningCount={lightningCount}
         play={props.play}
       />
-
+      <CompositionControls play={props.play} />
       {<DebugPanel data={[{ lightningCount }]} />}
     </Composition>
   );
