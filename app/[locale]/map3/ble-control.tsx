@@ -1,6 +1,7 @@
 "use client";
 import { Gamepad, Loader2 } from "lucide-react";
 import { useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 1500;
@@ -290,73 +291,78 @@ export default function BLEControl({
       : "Connect device";
 
   return (
-    <div
-      className={`absolute top-[295px] right-0 z-90 ${containerClassName ?? ""}`}
-    >
-      <div className="mr-[10px] mt-[10px]">
-        <button
-          onClick={isConnected ? disconnectBLE : connectBLE}
-          disabled={isConnecting}
-          className={`flex items-center justify-center rounded-sm bg-white hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-            showButtonLabel
-              ? "h-12 min-w-[220px] gap-3 px-5 text-sm font-semibold shadow-lg"
-              : "h-[29px] w-[29px]"
-          } ${buttonClassName ?? ""}`}
-          title={buttonTitle}
-        >
-          {isConnecting ? (
-            <Loader2
-              width={18}
-              height={18}
-              className={`animate-spin ${showButtonLabel ? "text-current" : "text-gray-500"}`}
-            />
-          ) : (
-            <Gamepad
-              width={showButtonLabel ? 20 : 22}
-              height={showButtonLabel ? 20 : 22}
-              strokeWidth={2.5}
-              className={
-                showButtonLabel
-                  ? "text-current"
+    <>
+      <div
+        className={`absolute top-[295px] right-0 z-90 ${containerClassName ?? ""}`}
+      >
+        <div className="mr-[10px] mt-[10px] flex justify-end">
+          <button
+            onClick={isConnected ? disconnectBLE : connectBLE}
+            disabled={isConnecting}
+            className={`flex items-center justify-center rounded-sm bg-white hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+              showButtonLabel
+                ? "h-12 min-w-[220px] gap-3 px-5 text-sm font-semibold shadow-lg"
+                : "h-[29px] w-[29px]"
+            } ${buttonClassName ?? ""}`}
+            title={buttonTitle}
+          >
+            {isConnecting ? (
+              <Loader2
+                width={18}
+                height={18}
+                className={`animate-spin ${showButtonLabel ? "text-current" : "text-gray-500"}`}
+              />
+            ) : (
+              <Gamepad
+                width={showButtonLabel ? 20 : 22}
+                height={showButtonLabel ? 20 : 22}
+                strokeWidth={2.5}
+                className={
+                  showButtonLabel
+                    ? "text-current"
+                    : isConnected
+                      ? "text-green-600"
+                      : "text-gray-700"
+                }
+              />
+            )}
+            {showButtonLabel ? (
+              <span>
+                {isConnecting
+                  ? "Connecting sensor…"
                   : isConnected
-                    ? "text-green-600"
-                    : "text-gray-700"
-              }
-            />
-          )}
-          {showButtonLabel ? (
-            <span>
-              {isConnecting
-                ? "Connecting sensor…"
-                : isConnected
-                  ? "Disconnect BLE sensor"
-                  : "Connect BLE sensor"}
-            </span>
-          ) : null}
-        </button>
+                    ? "Disconnect BLE sensor"
+                    : "Connect BLE sensor"}
+              </span>
+            ) : null}
+          </button>
+        </div>
+
+        {error && (
+          <div
+            className={`mr-[10px] mt-1 max-w-[160px] rounded bg-white p-2 text-xs text-red-500 shadow-md ${errorClassName ?? ""}`}
+          >
+            {error}
+          </div>
+        )}
       </div>
 
-      {error && (
-        <div
-          className={`mr-[10px] mt-1 max-w-[160px] rounded bg-white p-2 text-xs text-red-500 shadow-md ${errorClassName ?? ""}`}
-        >
-          {error}
-        </div>
-      )}
-
-      {isConnected && bleDevice.device && (
-        <div
-          className={`mt-12 mr-[10px] min-h-52 w-48 space-y-2 rounded bg-white p-2 text-sm shadow-md ${infoCardClassName ?? ""}`}
-        >
-          <p className="font-medium">
-            {bleDevice.device.name ?? "Unknown Device"}
-          </p>
-          <p>roll: {receivedData?.euler.roll?.toFixed(3)}</p>
-          <p>pitch: {receivedData?.euler.pitch?.toFixed(3)}</p>
-          <p>yaw: {receivedData?.euler.yaw?.toFixed(3)}</p>
-          <p>CO₂: {co2value?.toFixed(3)} ppm</p>
-        </div>
-      )}
-    </div>
+      {isConnected &&
+        bleDevice.device &&
+        createPortal(
+          <div
+            className={`absolute bottom-16 right-0 z-10 mt-12 mr-[10px] min-h-52 w-48 space-y-2 rounded bg-white p-2 text-sm shadow-md ${infoCardClassName ?? ""}`}
+          >
+            <p className="font-medium">
+              {bleDevice?.device?.name ?? "Unknown Device"}
+            </p>
+            <p>roll: {receivedData?.euler.roll?.toFixed(3)}</p>
+            <p>pitch: {receivedData?.euler.pitch?.toFixed(3)}</p>
+            <p>yaw: {receivedData?.euler.yaw?.toFixed(3)}</p>
+            <p>CO₂: {co2value?.toFixed(3)} ppm</p>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
