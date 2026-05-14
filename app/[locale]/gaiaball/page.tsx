@@ -24,8 +24,10 @@ import {
   type MotionTuningSettings,
   useSensorSmoothing,
 } from "../map3/use-sensor-smoothing";
+import { DEFAULT_CO2_LEVEL_THRESHOLD } from "../map3/map-constants";
 
 const MOTION_TUNING_STORAGE_KEY = "gaiaball-motion-tuning-settings";
+const CO2_THRESHOLD_STORAGE_KEY = "gaiaball-co2-threshold";
 const PD_WS_STORAGE_KEY = "gaiaball-pd-ws-url";
 const DEFAULT_PD_WS_URL =
   process.env.NEXT_PUBLIC_PD_WS_URL ?? "ws://localhost:9001/";
@@ -98,6 +100,7 @@ function SensorMonitorPageContent() {
   const [motionTuning, setMotionTuning] = useState<MotionTuningSettings>(
     DEFAULT_MOTION_TUNING_SETTINGS,
   );
+  const [co2Threshold, setCo2Threshold] = useState(DEFAULT_CO2_LEVEL_THRESHOLD);
   const [lastPublishedAt, setLastPublishedAt] = useState<string | null>(null);
   // Frequency state (Hz)
   const DEFAULT_FREQ = 60;
@@ -146,6 +149,25 @@ function SensorMonitorPageContent() {
       JSON.stringify(motionTuning),
     );
   }, [motionTuning]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(CO2_THRESHOLD_STORAGE_KEY);
+    if (!saved) {
+      return;
+    }
+
+    const parsed = Number(saved);
+    if (!Number.isFinite(parsed)) {
+      window.localStorage.removeItem(CO2_THRESHOLD_STORAGE_KEY);
+      return;
+    }
+
+    setCo2Threshold(parsed);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(CO2_THRESHOLD_STORAGE_KEY, `${co2Threshold}`);
+  }, [co2Threshold]);
 
   useEffect(() => {
     const savedPdWsUrl = window.localStorage.getItem(PD_WS_STORAGE_KEY);
@@ -474,7 +496,9 @@ function SensorMonitorPageContent() {
       <MotionTuningPanel
         settings={motionTuning}
         diagnostics={diagnostics}
+        co2Threshold={co2Threshold}
         onChange={setMotionTuning}
+        onCo2ThresholdChange={setCo2Threshold}
         onReset={() => setMotionTuning(DEFAULT_MOTION_TUNING_SETTINGS)}
         onRecalibrate={resetCalibration}
       />

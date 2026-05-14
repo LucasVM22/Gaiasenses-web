@@ -35,10 +35,14 @@ import {
   type MotionTuningSettings,
 } from "./use-sensor-smoothing";
 import { ClimaData } from "./use-composition-queue";
-import { enabledCompositionKeys } from "./map-constants";
+import {
+  DEFAULT_CO2_LEVEL_THRESHOLD,
+  enabledCompositionKeys,
+} from "./map-constants";
 import CompositionsInfo from "@/components/compositions/compositions-info";
 
 const MOTION_TUNING_STORAGE_KEY = "map3-motion-tuning-settings";
+const CO2_THRESHOLD_STORAGE_KEY = "map3-co2-threshold";
 
 type GaiasensesMapProps = {
   children: ReactNode;
@@ -73,6 +77,7 @@ export default function GaiasensesMap({
   const [motionTuning, setMotionTuning] = useState<MotionTuningSettings>(
     DEFAULT_MOTION_TUNING_SETTINGS,
   );
+  const [co2Threshold, setCo2Threshold] = useState(DEFAULT_CO2_LEVEL_THRESHOLD);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(MOTION_TUNING_STORAGE_KEY);
@@ -89,11 +94,30 @@ export default function GaiasensesMap({
   }, []);
 
   useEffect(() => {
+    const saved = window.localStorage.getItem(CO2_THRESHOLD_STORAGE_KEY);
+    if (!saved) {
+      return;
+    }
+
+    const parsed = Number(saved);
+    if (!Number.isFinite(parsed)) {
+      window.localStorage.removeItem(CO2_THRESHOLD_STORAGE_KEY);
+      return;
+    }
+
+    setCo2Threshold(parsed);
+  }, []);
+
+  useEffect(() => {
     window.localStorage.setItem(
       MOTION_TUNING_STORAGE_KEY,
       JSON.stringify(motionTuning),
     );
   }, [motionTuning]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CO2_THRESHOLD_STORAGE_KEY, `${co2Threshold}`);
+  }, [co2Threshold]);
 
   const { getNextComposition } = useCompositionQueue(clima);
 
@@ -131,6 +155,7 @@ export default function GaiasensesMap({
     initialLat,
     initialLng,
     motionTuning,
+    co2LevelThreshold: co2Threshold,
   });
 
   return (
@@ -149,7 +174,9 @@ export default function GaiasensesMap({
       <MotionTuningPanel
         settings={motionTuning}
         diagnostics={motionDiagnostics}
+        co2Threshold={co2Threshold}
         onChange={setMotionTuning}
+        onCo2ThresholdChange={setCo2Threshold}
         onReset={() => setMotionTuning(DEFAULT_MOTION_TUNING_SETTINGS)}
         onRecalibrate={recalibrateSensor}
       />

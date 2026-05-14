@@ -16,7 +16,9 @@ import { DEFAULT_MOTION_TUNING_SETTINGS } from "./use-sensor-smoothing";
 type MotionTuningPanelProps = {
   settings: MotionTuningSettings;
   diagnostics: MotionDiagnostics;
+  co2Threshold: number;
   onChange: (settings: MotionTuningSettings) => void;
+  onCo2ThresholdChange: (value: number) => void;
   onReset: () => void;
   onRecalibrate: () => void;
 };
@@ -203,10 +205,16 @@ function roundToStep(value: number, step: number) {
   return Number(value.toFixed(precision));
 }
 
+const CO2_THRESHOLD_MIN = 300;
+const CO2_THRESHOLD_MAX = 10000;
+const CO2_THRESHOLD_STEP = 10;
+
 export default function MotionTuningPanel({
   settings,
   diagnostics,
+  co2Threshold,
   onChange,
+  onCo2ThresholdChange,
   onReset,
   onRecalibrate,
 }: MotionTuningPanelProps) {
@@ -234,6 +242,14 @@ export default function MotionTuningPanel({
     onChange({ ...preset.settings });
   }
 
+  function updateCo2Threshold(rawValue: number) {
+    const nextValue = roundToStep(
+      clamp(rawValue, CO2_THRESHOLD_MIN, CO2_THRESHOLD_MAX),
+      CO2_THRESHOLD_STEP,
+    );
+    onCo2ThresholdChange(nextValue);
+  }
+
   return (
     <div className="absolute right-4 bottom-4 z-20 pointer-events-auto">
       {isOpen ? (
@@ -258,6 +274,51 @@ export default function MotionTuningPanel({
             </div>
           </CardHeader>
           <CardContent className="space-y-4 overflow-y-auto max-h-[calc(70vh-88px)]">
+            <div className="rounded-md border bg-slate-50 p-3 space-y-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                CO2 Trigger
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium" htmlFor="co2Threshold">
+                    CO2 threshold
+                  </label>
+                  <div className="flex items-center gap-2 w-[124px]">
+                    <Input
+                      id="co2Threshold"
+                      type="number"
+                      value={co2Threshold}
+                      min={CO2_THRESHOLD_MIN}
+                      max={CO2_THRESHOLD_MAX}
+                      step={CO2_THRESHOLD_STEP}
+                      className="h-8"
+                      onChange={(event) =>
+                        updateCo2Threshold(Number(event.target.value))
+                      }
+                    />
+                    <span className="text-xs text-muted-foreground w-8 text-right">
+                      ppm
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={CO2_THRESHOLD_MIN}
+                  max={CO2_THRESHOLD_MAX}
+                  step={CO2_THRESHOLD_STEP}
+                  value={co2Threshold}
+                  onChange={(event) =>
+                    updateCo2Threshold(Number(event.target.value))
+                  }
+                  className="w-full accent-emerald-600"
+                />
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  The composition opens when CO2 is above this value, and
+                  returns to the map when CO2 drops below it.
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-md border bg-slate-50 p-3 space-y-2">
               <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 Presets

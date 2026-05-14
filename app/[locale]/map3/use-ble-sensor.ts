@@ -7,7 +7,6 @@ import {
   type MotionTuningSettings,
 } from "./use-sensor-smoothing";
 import type { espCo2Response } from "./ble-control";
-import { CO2_LEVEL_THRESHOLD } from "./map-constants";
 
 type UseBLESensorOptions = {
   mapRef: React.RefObject<MapRef>;
@@ -16,6 +15,7 @@ type UseBLESensorOptions = {
   initialLat: number;
   initialLng: number;
   motionTuning: MotionTuningSettings;
+  co2LevelThreshold: number;
 };
 
 export function useBLESensor({
@@ -25,6 +25,7 @@ export function useBLESensor({
   initialLat,
   initialLng,
   motionTuning,
+  co2LevelThreshold,
 }: UseBLESensorOptions) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -88,7 +89,7 @@ export function useBLESensor({
   const handleOnCO2Sensor = useCallback(
     (data: espCo2Response) => {
       if (!isCompositionPlayingRef.current) {
-        if (data.co2.ppm > CO2_LEVEL_THRESHOLD) {
+        if (data.co2.ppm > co2LevelThreshold) {
           const composition = getNextComposition();
           const newSearchParams = new URLSearchParams(searchParams.toString());
           newSearchParams.set(
@@ -106,7 +107,7 @@ export function useBLESensor({
           isCompositionPlayingRef.current = true;
         }
       } else {
-        if (data.co2.ppm <= CO2_LEVEL_THRESHOLD) {
+        if (data.co2.ppm <= co2LevelThreshold) {
           const newSearchParams = new URLSearchParams(searchParams.toString());
           newSearchParams.set("lat", searchParams.get("lat") ?? "0");
           newSearchParams.set("lng", searchParams.get("lng") ?? "0");
@@ -128,6 +129,7 @@ export function useBLESensor({
       initialLng,
       pathname,
       router,
+      co2LevelThreshold,
     ],
   );
 
