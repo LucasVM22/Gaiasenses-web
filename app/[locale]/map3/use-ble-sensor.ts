@@ -31,6 +31,13 @@ export function useBLESensor({
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // Source of truth for whether a composition is active (or navigation to one
+  // is in flight). Set to true synchronously when we trigger an open so that
+  // duplicate sensor packets during the async router.replace() can't fire a
+  // second open. Set back to false ONLY by the useEffect below, which runs
+  // once navigation actually completes and searchParams reflects mode=map.
+  // Never reset it synchronously in the close handler — that would release the
+  // lock before the URL settles and allow a re-open race.
   const isCompositionPlayingRef = useRef(false);
 
   useEffect(() => {
@@ -117,7 +124,9 @@ export function useBLESensor({
           );
           newSearchParams.set("mode", "map");
           router.replace(`${pathname}?${newSearchParams.toString()}`);
-          isCompositionPlayingRef.current = false;
+          // Do NOT set isCompositionPlayingRef.current = false here.
+          // The lock is released by the useEffect above once searchParams
+          // actually reflects mode=map after navigation completes.
         }
       }
     },

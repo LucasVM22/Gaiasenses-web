@@ -12,6 +12,7 @@ import type {
   MotionTuningSettings,
 } from "./use-sensor-smoothing";
 import { DEFAULT_MOTION_TUNING_SETTINGS } from "./use-sensor-smoothing";
+import { createPortal } from "react-dom";
 
 type MotionTuningPanelProps = {
   settings: MotionTuningSettings;
@@ -21,6 +22,12 @@ type MotionTuningPanelProps = {
   onCo2ThresholdChange: (value: number) => void;
   onReset: () => void;
   onRecalibrate: () => void;
+  /** When provided, a simulate button appears in the CO2 Trigger section. */
+  onSimulateCo2?: () => void;
+  /** Whether the CO2 simulation is currently running. */
+  isCo2Simulating?: boolean;
+  /** Live ppm value shown while the simulation is running. */
+  simulatedCo2Ppm?: number | null;
 };
 
 type TuningField = {
@@ -217,6 +224,9 @@ export default function MotionTuningPanel({
   onCo2ThresholdChange,
   onReset,
   onRecalibrate,
+  onSimulateCo2,
+  isCo2Simulating = false,
+  simulatedCo2Ppm = null,
 }: MotionTuningPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -251,246 +261,285 @@ export default function MotionTuningPanel({
   }
 
   return (
-    <div className="absolute right-4 bottom-4 z-20 pointer-events-auto">
-      {isOpen ? (
-        <Card className="w-[340px] max-h-[70vh] overflow-hidden bg-white/95 backdrop-blur">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Motion Tuning</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Values apply live. Use recalibrate to zero the current globe
-                  pose without reconnecting Bluetooth.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 overflow-y-auto max-h-[calc(70vh-88px)]">
-            <div className="rounded-md border bg-slate-50 p-3 space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                CO2 Trigger
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm font-medium" htmlFor="co2Threshold">
-                    CO2 threshold
-                  </label>
-                  <div className="flex items-center gap-2 w-[124px]">
-                    <Input
-                      id="co2Threshold"
-                      type="number"
-                      value={co2Threshold}
-                      min={CO2_THRESHOLD_MIN}
-                      max={CO2_THRESHOLD_MAX}
-                      step={CO2_THRESHOLD_STEP}
-                      className="h-8"
-                      onChange={(event) =>
-                        updateCo2Threshold(Number(event.target.value))
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground w-8 text-right">
-                      ppm
-                    </span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min={CO2_THRESHOLD_MIN}
-                  max={CO2_THRESHOLD_MAX}
-                  step={CO2_THRESHOLD_STEP}
-                  value={co2Threshold}
-                  onChange={(event) =>
-                    updateCo2Threshold(Number(event.target.value))
-                  }
-                  className="w-full accent-emerald-600"
-                />
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  The composition opens when CO2 is above this value, and
-                  returns to the map when CO2 drops below it.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-md border bg-slate-50 p-3 space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Presets
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {tuningPresets.map((preset) => {
-                  const isActive = Object.entries(preset.settings).every(
-                    ([key, value]) =>
-                      settings[key as keyof MotionTuningSettings] === value,
-                  );
-
-                  return (
-                    <button
-                      key={preset.name}
+    <>
+      <div className="absolute right-4 bottom-4 z-20 pointer-events-auto">
+        {isOpen ? (
+          createPortal(
+            <div className="absolute right-4 bottom-4 z-20 pointer-events-auto">
+              <Card className="w-[340px] max-h-[70vh] overflow-hidden bg-white/95 backdrop-blur">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base">Motion Tuning</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Values apply live. Use recalibrate to zero the current
+                        globe pose without reconnecting Bluetooth.
+                      </p>
+                    </div>
+                    <Button
                       type="button"
-                      onClick={() => applyPreset(preset)}
-                      className={`rounded-md border px-3 py-2 text-left transition-colors ${
-                        isActive
-                          ? "border-sky-300 bg-sky-50"
-                          : "bg-white hover:bg-slate-50"
-                      }`}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsOpen(false)}
                     >
+                      Close
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 overflow-y-auto max-h-[calc(70vh-88px)]">
+                  <div className="rounded-md border bg-slate-50 p-3 space-y-2">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      CO2 Trigger
+                    </div>
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium">
-                          {preset.name}
-                        </span>
-                        {isActive && (
-                          <span className="text-[11px] font-medium uppercase tracking-wide text-sky-700">
-                            Active
+                        <label
+                          className="text-sm font-medium"
+                          htmlFor="co2Threshold"
+                        >
+                          CO2 threshold
+                        </label>
+                        <div className="flex items-center gap-2 w-[124px]">
+                          <Input
+                            id="co2Threshold"
+                            type="number"
+                            value={co2Threshold}
+                            min={CO2_THRESHOLD_MIN}
+                            max={CO2_THRESHOLD_MAX}
+                            step={CO2_THRESHOLD_STEP}
+                            className="h-8"
+                            onChange={(event) =>
+                              updateCo2Threshold(Number(event.target.value))
+                            }
+                          />
+                          <span className="text-xs text-muted-foreground w-8 text-right">
+                            ppm
                           </span>
-                        )}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {preset.description}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      <input
+                        type="range"
+                        min={CO2_THRESHOLD_MIN}
+                        max={CO2_THRESHOLD_MAX}
+                        step={CO2_THRESHOLD_STEP}
+                        value={co2Threshold}
+                        onChange={(event) =>
+                          updateCo2Threshold(Number(event.target.value))
+                        }
+                        className="w-full accent-emerald-600"
+                      />
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        The composition opens when CO2 is above this value, and
+                        returns to the map when CO2 drops below it.
+                      </p>
+                      {onSimulateCo2 && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isCo2Simulating ? "secondary" : "outline"}
+                            disabled={isCo2Simulating}
+                            onClick={onSimulateCo2}
+                            className="flex"
+                          >
+                            {isCo2Simulating
+                              ? `Simulating… ${simulatedCo2Ppm != null ? `${simulatedCo2Ppm} ppm` : ""}`
+                              : `Simulate CO2 spike (${co2Threshold + 500} → ${co2Threshold} / 30 s)`}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-            <div className="rounded-md border bg-slate-50 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Motion Diagnostics
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    diagnostics.popupLocked
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-emerald-100 text-emerald-700"
-                  }`}
-                >
-                  {diagnostics.popupLocked ? "Popup Locked" : "Popup Free"}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded bg-white px-2 py-1.5 border">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                    Phase
-                  </div>
-                  <div className="font-medium capitalize">
-                    {diagnostics.phase}
-                  </div>
-                </div>
-                <div className="rounded bg-white px-2 py-1.5 border">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                    Motion
-                  </div>
-                  <div className="font-medium">
-                    {diagnostics.motionMagnitude.toFixed(3)} deg
-                  </div>
-                </div>
-                <div className="rounded bg-white px-2 py-1.5 border">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                    Calibrated
-                  </div>
-                  <div className="font-medium">
-                    {diagnostics.calibrated ? "Yes" : "No"}
-                  </div>
-                </div>
-                <div className="rounded bg-white px-2 py-1.5 border">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                    Lock Remaining
-                  </div>
-                  <div className="font-medium">
-                    {Math.round(diagnostics.popupLockRemainingMs)} ms
-                  </div>
-                </div>
-              </div>
-            </div>
+                  <div className="rounded-md border bg-slate-50 p-3 space-y-2">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Presets
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {tuningPresets.map((preset) => {
+                        const isActive = Object.entries(preset.settings).every(
+                          ([key, value]) =>
+                            settings[key as keyof MotionTuningSettings] ===
+                            value,
+                        );
 
-            {tuningFields.map((field) => (
-              <div key={field.key} className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium" htmlFor={field.key}>
-                      {field.label}
-                    </label>
-                    <div className="group relative inline-flex items-center">
-                      <button
-                        type="button"
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 hover:text-slate-700"
-                        aria-label={`More information about ${field.label}`}
+                        return (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => applyPreset(preset)}
+                            className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                              isActive
+                                ? "border-sky-300 bg-sky-50"
+                                : "bg-white hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">
+                                {preset.name}
+                              </span>
+                              {isActive && (
+                                <span className="text-[11px] font-medium uppercase tracking-wide text-sky-700">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              {preset.description}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border bg-slate-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Motion Diagnostics
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          diagnostics.popupLocked
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}
                       >
-                        <span className="text-[11px] font-bold leading-none">
-                          ?
-                        </span>
-                      </button>
-                      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-md border bg-white p-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                        {field.description}
+                        {diagnostics.popupLocked
+                          ? "Popup Locked"
+                          : "Popup Free"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="rounded bg-white px-2 py-1.5 border">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Phase
+                        </div>
+                        <div className="font-medium capitalize">
+                          {diagnostics.phase}
+                        </div>
+                      </div>
+                      <div className="rounded bg-white px-2 py-1.5 border">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Motion
+                        </div>
+                        <div className="font-medium">
+                          {diagnostics.motionMagnitude.toFixed(3)} deg
+                        </div>
+                      </div>
+                      <div className="rounded bg-white px-2 py-1.5 border">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Calibrated
+                        </div>
+                        <div className="font-medium">
+                          {diagnostics.calibrated ? "Yes" : "No"}
+                        </div>
+                      </div>
+                      <div className="rounded bg-white px-2 py-1.5 border">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Lock Remaining
+                        </div>
+                        <div className="font-medium">
+                          {Math.round(diagnostics.popupLockRemainingMs)} ms
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 w-[124px]">
-                    <Input
-                      id={field.key}
-                      type="number"
-                      value={settings[field.key]}
-                      min={field.min}
-                      max={field.max}
-                      step={field.step}
-                      className="h-8"
-                      onChange={(event) =>
-                        updateSetting(field.key, Number(event.target.value))
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground w-8 text-right">
-                      {field.unit ?? ""}
-                    </span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  value={settings[field.key]}
-                  onChange={(event) =>
-                    updateSetting(field.key, Number(event.target.value))
-                  }
-                  className="w-full accent-blue-600"
-                />
-              </div>
-            ))}
 
-            <div className="flex gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onReset}
-                className="flex-1"
-              >
-                Reset Defaults
-              </Button>
-              <Button type="button" onClick={onRecalibrate} className="flex-1">
-                Recalibrate
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          className="bg-white/95 backdrop-blur"
-          onClick={() => setIsOpen(true)}
-        >
-          <SlidersHorizontal className="mr-2 h-4 w-4" />
-          Tune Motion
-        </Button>
-      )}
-    </div>
+                  {tuningFields.map((field) => (
+                    <div key={field.key} className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <label
+                            className="text-sm font-medium"
+                            htmlFor={field.key}
+                          >
+                            {field.label}
+                          </label>
+                          <div className="group relative inline-flex items-center">
+                            <button
+                              type="button"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 hover:text-slate-700"
+                              aria-label={`More information about ${field.label}`}
+                            >
+                              <span className="text-[11px] font-bold leading-none">
+                                ?
+                              </span>
+                            </button>
+                            <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-md border bg-white p-2 text-xs leading-relaxed text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                              {field.description}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-[124px]">
+                          <Input
+                            id={field.key}
+                            type="number"
+                            value={settings[field.key]}
+                            min={field.min}
+                            max={field.max}
+                            step={field.step}
+                            className="h-8"
+                            onChange={(event) =>
+                              updateSetting(
+                                field.key,
+                                Number(event.target.value),
+                              )
+                            }
+                          />
+                          <span className="text-xs text-muted-foreground w-8 text-right">
+                            {field.unit ?? ""}
+                          </span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={field.min}
+                        max={field.max}
+                        step={field.step}
+                        value={settings[field.key]}
+                        onChange={(event) =>
+                          updateSetting(field.key, Number(event.target.value))
+                        }
+                        className="w-full accent-blue-600"
+                      />
+                    </div>
+                  ))}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onReset}
+                      className="flex-1"
+                    >
+                      Reset Defaults
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={onRecalibrate}
+                      className="flex-1"
+                    >
+                      Recalibrate
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>,
+            document.body,
+          )
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="bg-white/95 backdrop-blur"
+            onClick={() => setIsOpen(true)}
+          >
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            Tune Motion
+          </Button>
+        )}
+      </div>
+    </>
   );
 }

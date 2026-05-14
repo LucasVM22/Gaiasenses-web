@@ -30,6 +30,7 @@ import { useCompositionQueue } from "./use-composition-queue";
 import { useMapInteractions } from "./use-map-interactions";
 import { useAutoMode } from "./use-auto-mode";
 import { useBLESensor } from "./use-ble-sensor";
+import { useCo2Simulation } from "./use-co2-simulation";
 import {
   DEFAULT_MOTION_TUNING_SETTINGS,
   type MotionTuningSettings,
@@ -158,6 +159,18 @@ export default function GaiasensesMap({
     co2LevelThreshold: co2Threshold,
   });
 
+  const {
+    startSimulation: startCo2Simulation,
+    isSimulating: isCo2Simulating,
+    simulatedPpm: simulatedCo2Ppm,
+  } = useCo2Simulation({
+    onCo2Sample: handleOnCO2Sensor,
+    startPpm: co2Threshold + 500,
+    endPpm: co2Threshold,
+    durationMs: 30_000,
+    tickMs: 250,
+  });
+
   return (
     <div
       style={{ height: "100svh", width: "100svw" }}
@@ -179,6 +192,9 @@ export default function GaiasensesMap({
         onCo2ThresholdChange={setCo2Threshold}
         onReset={() => setMotionTuning(DEFAULT_MOTION_TUNING_SETTINGS)}
         onRecalibrate={recalibrateSensor}
+        onSimulateCo2={startCo2Simulation}
+        isCo2Simulating={isCo2Simulating}
+        simulatedCo2Ppm={simulatedCo2Ppm}
       />
       <div>
         <AnimatePresence>
