@@ -88,7 +88,8 @@ export default function GaiasensesMap({
 
   useEffect(() => {
     if (screen) {
-      screen.orientation.lock("portrait").catch(() => {
+      //@ts-expect-error typing for screen.orientation is very broken, and lock is missing
+      screen.orientation?.lock?.("portrait").catch(() => {
         console.log("Could not lock screen orientation");
       });
     }
