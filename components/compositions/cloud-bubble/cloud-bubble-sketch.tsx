@@ -3,8 +3,9 @@
 import type { P5CanvasInstance, SketchProps } from "@p5-wrapper/react";
 //@ts-ignore this is generating require calls, should look into that
 import { NextReactP5Wrapper } from "@p5-wrapper/next";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { usePd4WebInstance } from "@/app/[locale]/map3/pd4web-instance-context";
 
 export type CloudBubbleSketchProps = {
   clouds: number;
@@ -140,7 +141,7 @@ function sketch(p5: P5CanvasInstance<SketchProps & CloudBubbleSketchProps>) {
 }
 
 export default function CloudBubbleSketch(
-  initialProps: CloudBubbleSketchProps
+  initialProps: CloudBubbleSketchProps,
 ) {
   const searchParams = useSearchParams();
 
@@ -148,15 +149,39 @@ export default function CloudBubbleSketch(
   const urlClouds = searchParams?.get("clouds");
   const urlPlay = searchParams?.get("play");
 
+  const { pdRef } = usePd4WebInstance();
   const clouds = useMemo(
     () => (urlClouds !== null ? Number(urlClouds) : initialProps.clouds),
-    [urlClouds, initialProps.clouds]
+    [urlClouds, initialProps.clouds],
   );
 
   const play =
     urlPlay !== null
       ? urlPlay === "true" || urlPlay === "1"
       : initialProps.play;
+
+  useEffect(() => {
+    if (!play) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      const pd = pdRef.current;
+      if (!pd) {
+        return;
+      }
+
+      const lat = Math.random() * 180 - 90;
+      const lon = Math.random() * 360 - 180;
+
+      pd.sendFloat("lati", lat);
+      pd.sendFloat("rotacaoSite", lon);
+    }, 2000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [pdRef, play]);
 
   // passa os valores numéricos ao wrapper p5 — NextReactP5Wrapper chamará updateWithProps internamente
   return <NextReactP5Wrapper sketch={sketch} clouds={clouds} play={play} />;

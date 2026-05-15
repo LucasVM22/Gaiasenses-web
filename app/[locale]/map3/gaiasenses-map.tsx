@@ -87,6 +87,13 @@ export default function GaiasensesMap({
   const [co2Threshold, setCo2Threshold] = useState(DEFAULT_CO2_LEVEL_THRESHOLD);
 
   useEffect(() => {
+    if (screen) {
+      screen.orientation.lock("portrait").catch(() => {
+        console.log("Could not lock screen orientation");
+      });
+    }
+  }, []);
+  useEffect(() => {
     const saved = window.localStorage.getItem(MOTION_TUNING_STORAGE_KEY);
     if (!saved) {
       return;

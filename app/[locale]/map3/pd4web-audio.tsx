@@ -7,8 +7,9 @@ import type { MapRef } from "react-map-gl";
 import type { Map3Pd4WebMoment } from "./pd4web-patches";
 import { resolveMap3Pd4WebPatch } from "./pd4web-patches";
 import { usePd4WebInstance } from "./pd4web-instance-context";
+import { Button } from "@/components/ui/button";
 
-const DEBUG = false;
+const DEBUG = true;
 
 type Pd4WebModuleOptions = {
   wasmBinary: ArrayBuffer;
@@ -700,8 +701,26 @@ export default function Pd4WebAudio({
   const showPd4WebDebugUi =
     Boolean(patch) && isAudioOn && patch?.binding.type === "map-center";
 
+  const [isDebugUIOpen, setIsDebugUIOpen] = useState(false);
+
+  const openDebugUI = () => {
+    setIsDebugUIOpen(true);
+  };
+
+  const closeDebugUI = () => {
+    setIsDebugUIOpen(false);
+  };
+
   return (
     <>
+      {DEBUG && showPd4WebDebugUi && (
+        <div className="absolute top-[82svh] left-4 z-20">
+          <Button variant="secondary" onClick={openDebugUI}>
+            Pd4Web Debug
+          </Button>
+        </div>
+      )}
+
       <div
         className={`absolute top-[90svh] p-1 left-4 z-20 h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm ${showMapAudioUi ? "flex" : "hidden"}`}
       >
@@ -718,9 +737,14 @@ export default function Pd4WebAudio({
         </div>
       )}
 
-      {showPd4WebDebugUi && (
-        <div className="absolute bottom-16 left-4 z-20 w-[min(320px,calc(100vw-2rem))] rounded-lg bg-black/80 p-3 text-xs text-white shadow-lg backdrop-blur-sm">
-          <div className="mb-2 font-semibold">Pd4Web live tuning</div>
+      {DEBUG && isDebugUIOpen && (
+        <div className="absolute bottom-20 left-4 z-20 w-[min(320px,calc(100vw-2rem))] rounded-lg bg-black/80 p-3 text-xs text-white shadow-lg backdrop-blur-sm">
+          <div className="mb-2 font-semibold flex justify-between items-center">
+            Pd4Web live tuning{" "}
+            <Button variant="secondary" onClick={closeDebugUI}>
+              close
+            </Button>
+          </div>
           <div className="mb-3 grid grid-cols-[1fr_auto] items-center gap-2">
             <div className="flex items-center gap-1">
               <label htmlFor="pd4web-poll-ms">pollMs</label>
