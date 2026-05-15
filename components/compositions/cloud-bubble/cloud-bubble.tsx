@@ -33,7 +33,7 @@ export default async function CloudBubble(props: CloudBubbleProps) {
       return;
     }
 
-    const intervalId = window.setInterval(() => {
+    const intervalId = setInterval(() => {
       const pd = pdRef.current;
       if (!pd) {
         return;
@@ -47,7 +47,7 @@ export default async function CloudBubble(props: CloudBubbleProps) {
     }, 2000);
 
     return () => {
-      window.clearInterval(intervalId);
+      clearInterval(intervalId);
     };
   }, [pdRef, play]);
 
