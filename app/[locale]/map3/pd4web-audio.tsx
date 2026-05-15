@@ -40,6 +40,9 @@ type Pd4WebAudioProps = {
   mapRef: RefObject<MapRef | null>;
   active?: boolean;
   mapInputActive?: boolean;
+  accX?: number | null;
+  accY?: number | null;
+  accZ?: number | null;
 };
 
 function logPd4Web(event: string, details?: Record<string, unknown>) {
@@ -209,6 +212,9 @@ export default function Pd4WebAudio({
   mapRef,
   active = true,
   mapInputActive = true,
+  accX,
+  accY,
+  accZ,
 }: Pd4WebAudioProps) {
   const { setPdInstance } = usePd4WebInstance();
   const patch = resolveMap3Pd4WebPatch({ moment, composition });
@@ -524,8 +530,12 @@ export default function Pd4WebAudio({
 
     const pollMs = binding.pollMs ?? 100;
     const epsilon = binding.epsilon ?? 0.0001;
+    const accEpsilon = binding.accEpsilon ?? 0.05;
     let prevLat: number | null = null;
     let prevLng: number | null = null;
+    let prevAccX: number | null = null;
+    let prevAccY: number | null = null;
+    let prevAccZ: number | null = null;
 
     const intervalId = window.setInterval(() => {
       const pd = pdRef.current;
@@ -539,12 +549,10 @@ export default function Pd4WebAudio({
       const lat = center.lat;
       const lng = center.lng;
 
-      if (
-        prevLat !== null &&
-        prevLng !== null &&
-        Math.abs(lat - prevLat) < epsilon &&
-        Math.abs(lng - prevLng) < epsilon
-      ) {
+      if (prevLat !== null && Math.abs(lat - prevLat) < epsilon) {
+        return;
+      }
+      if (prevLng !== null && Math.abs(lng - prevLng) < epsilon) {
         return;
       }
 
@@ -552,10 +560,41 @@ export default function Pd4WebAudio({
       prevLng = lng;
 
       if (binding.latitudeReceiver) {
+        console.log("Sending Lat to Pd4Web:", lat);
         pd.sendFloat(binding.latitudeReceiver, lat);
       }
       if (binding.longitudeReceiver) {
         pd.sendFloat(binding.longitudeReceiver, lng);
+      }
+
+      console.log("Received acc from props:", { accX, accY, accZ });
+      if (!accX || !accY || !accZ) {
+        return;
+      }
+
+      if (prevAccX !== null && Math.abs(accX - prevAccX) < accEpsilon) {
+        return;
+      }
+      if (prevAccY !== null && Math.abs(accY - prevAccY) < accEpsilon) {
+        return;
+      }
+      if (prevAccZ !== null && Math.abs(accZ - prevAccZ) < accEpsilon) {
+        return;
+      }
+
+      prevAccX = accX;
+      prevAccY = accY;
+      prevAccZ = accZ;
+
+      if (binding.accXReceiver) {
+        console.log("Sending accX to Pd4Web:", prevAccX);
+        pd.sendFloat(binding.accXReceiver, prevAccX);
+      }
+      if (binding.accYReceiver) {
+        pd.sendFloat(binding.accYReceiver, prevAccY);
+      }
+      if (binding.accZReceiver) {
+        pd.sendFloat(binding.accZReceiver, prevAccZ);
       }
     }, pollMs);
 
@@ -571,7 +610,7 @@ export default function Pd4WebAudio({
       });
       window.clearInterval(intervalId);
     };
-  }, [active, isLoaded, mapInputActive, mapRef, patch]);
+  }, [accX, accY, accZ, active, isLoaded, mapInputActive, mapRef, patch]);
 
   const showMapAudioUi = Boolean(patch) && moment === "map";
 

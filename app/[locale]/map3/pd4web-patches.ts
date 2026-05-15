@@ -77,6 +77,13 @@ export type Map3Pd4WebBinding =
        * Defaults to 0.0001° (≈ 10 m at the equator).
        */
       epsilon?: number;
+
+      /**
+       * Minimun acceleration change required before a new sendFloat is dispatched.
+       * Prevents unnecessary messages when the device is stationary.
+       * Defaults to 0.5.
+       */
+      accEpsilon?: number;
     }
   | {
       type: "none";
@@ -184,9 +191,9 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
   //     epsilon: DEFAULT_POSITION_EPSILON,
   //   },
   {
-    id: "paraiso27",
-    label: "Map sound 27",
-    bundleFolder: "paraiso27",
+    id: "paraiso30",
+    label: "Map sound 30",
+    bundleFolder: "paraiso30",
     activation: {
       // Keep this patch addressable in player mode too. Gating pause/resume is
       // handled in GaiasensesMap via the composition's `pd4web` flag.
@@ -196,12 +203,13 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
       type: "map-center",
       latitudeReceiver: "lati",
       longitudeReceiver: "rotacaoSite",
-      // accXReceiver: "input_accX",
-      // accYReceiver: "input_accY",
-      // accZReceiver: "input_accZ",
+      accXReceiver: "aceX",
+      accYReceiver: "aceY",
+      accZReceiver: "aceZ",
       // co2Receiver: "input_co2",
-      pollMs: 32,
-      epsilon: 0.0001,
+      pollMs: 64,
+      epsilon: 1,
+      accEpsilon: 0.05,
     },
   },
 ] as const;

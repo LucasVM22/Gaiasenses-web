@@ -3,7 +3,6 @@
 import TogglePlayButton from "./toggle-play-button";
 import { PatchData } from "@/hooks/types";
 
-import "react-h5-audio-player/lib/styles.css";
 import Player from "./my-player";
 
 export default function CompositionControls({
@@ -11,11 +10,13 @@ export default function CompositionControls({
   patchPath,
   messages,
   mp3 = false,
+  fadeOutMs = 1000,
 }: {
   play: boolean;
   patchPath?: PatchData["path"];
   messages?: PatchData["messages"];
   mp3?: boolean;
+  fadeOutMs?: number;
 }) {
   //  console.log(patchPath);
   // console.log(messages);
@@ -39,7 +40,9 @@ export default function CompositionControls({
   return (
     <>
       <TogglePlayButton play={play} {...webpdHandlers}></TogglePlayButton>
-      {patchPath && mp3 && <Player path={patchPath} play={play}></Player>}
+      {patchPath && mp3 && (
+        <Player path={patchPath} play={play} fadeOutMs={fadeOutMs}></Player>
+      )}
     </>
   );
 }

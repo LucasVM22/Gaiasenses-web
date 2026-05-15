@@ -13,7 +13,6 @@ export type ClimaData = {
 
 export function useCompositionQueue(clima: ClimaData) {
   const getNextComposition = useCallback((): [string, any] => {
-
     // 2. SCORES BASE
     const scores = {
       void: 25,
@@ -22,7 +21,7 @@ export function useCompositionQueue(clima: ClimaData) {
       flow: 0,
       ethereal: 0,
       infernus: 0,
-      thermal: 0
+      thermal: 0,
     };
 
     // 3. REGRAS
@@ -63,11 +62,11 @@ export function useCompositionQueue(clima: ClimaData) {
         } else {
           scores.thermal += clima.temperature * 0.8;
         }
-      }
+      },
     };
 
     // Executa todas as regras
-    Object.values(regras).forEach(fn => fn());
+    Object.values(regras).forEach((fn) => fn());
 
     // 4. COMPOSIÇÕES (adjusted to match enabled compositions)
     const composicoes: Record<string, string[]> = {
@@ -77,28 +76,35 @@ export function useCompositionQueue(clima: ClimaData) {
       flow: ["lluvia", "digitalOrganism", "riverLines", "zigzag", "curves"],
       ethereal: ["cloudBubble"],
       infernus: ["burningTrees", "bonfire"],
-      thermal: ["colorFlower", "generativeStrings", "curves", "riverLines", "mudflatScatter"]
+      thermal: [
+        "colorFlower",
+        "generativeStrings",
+        "curves",
+        "riverLines",
+        "mudflatScatter",
+      ],
     };
 
     // 5. DECISÃO
-    const categoria = (Object.keys(scores) as (keyof typeof scores)[]).reduce((a, b) =>
-      scores[a] > scores[b] ? a : b
+    const categoria = (Object.keys(scores) as (keyof typeof scores)[]).reduce(
+      (a, b) => (scores[a] > scores[b] ? a : b),
     );
 
     const escolha =
       composicoes[categoria][
         Math.floor(Math.random() * composicoes[categoria].length)
       ];
-    
+
     //checar no terminal:
-    console.log("————————————————————————————————————————————————————")
-    console.log("Scores:", scores);
-    console.log("Categoria escolhida:", categoria);
-    console.log("Composição escolhida:", escolha);
-    console.log("————————————————————————————————————————————————————")
+    // console.log("————————————————————————————————————————————————————")
+    // console.log("Scores:", scores);
+    // console.log("Categoria escolhida:", categoria);
+    // console.log("Composição escolhida:", escolha);
+    // console.log("————————————————————————————————————————————————————")
 
     // Find the composition info
-    const compositionInfo = CompositionsInfo[escolha as keyof typeof CompositionsInfo];
+    const compositionInfo =
+      CompositionsInfo[escolha as keyof typeof CompositionsInfo];
     if (!compositionInfo) {
       // Fallback to default
       const defaultComp = "attractor";
@@ -109,8 +115,6 @@ export function useCompositionQueue(clima: ClimaData) {
 
   return { getNextComposition };
 }
-
-
 
 /* Old implementation of getNextComposition for preservation:
 

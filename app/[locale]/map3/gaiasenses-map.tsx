@@ -285,6 +285,9 @@ export default function GaiasensesMap({
         mapRef={mapRef}
         active={isMapAudioActive}
         mapInputActive={isMapInputActive}
+        accX={latestSensorDataRef.current?.acc?.x}
+        accY={latestSensorDataRef.current?.acc?.y}
+        accZ={latestSensorDataRef.current?.acc?.z}
       />
 
       {/*
