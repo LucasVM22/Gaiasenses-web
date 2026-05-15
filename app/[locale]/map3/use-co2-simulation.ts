@@ -18,7 +18,7 @@ type UseCo2SimulationResult = {
 
 const DEFAULT_START_PPM = 2100;
 const DEFAULT_END_PPM = 420;
-const DEFAULT_DURATION_MS = 30_000;
+const DEFAULT_DURATION_MS = 10000;
 const DEFAULT_TICK_MS = 250;
 
 export function useCo2Simulation({

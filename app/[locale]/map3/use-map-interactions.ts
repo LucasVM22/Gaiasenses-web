@@ -10,13 +10,11 @@ import type {
 type UseMapInteractionsOptions = {
   initialLat: number;
   initialLng: number;
-  getNextComposition: () => [string, any];
 };
 
 export function useMapInteractions({
   initialLat,
   initialLng,
-  getNextComposition,
 }: UseMapInteractionsOptions) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -41,19 +39,19 @@ export function useMapInteractions({
   const updatePopupPosition = useCallback(
     (lat: number, lng: number) => {
       if (showPopup) return;
-      const composition = getNextComposition();
       const newSearchParams = new URLSearchParams(searchParams.toString());
       newSearchParams.set("lat", lat.toString());
       newSearchParams.set("lng", lng.toString());
       console.log("router replacing");
       newSearchParams.set("mode", "map");
-      newSearchParams.set("composition", composition[0]);
+      newSearchParams.delete("composition");
+      newSearchParams.delete("play");
       router.replace(`${pathname}?${newSearchParams.toString()}`);
       // Show popup immediately; loading clears when server responds with new initialLat/initialLng
       setShowPopup(true);
       setIsDataLoading(true);
     },
-    [showPopup, getNextComposition, searchParams, pathname, router],
+    [showPopup, searchParams, pathname, router],
   );
 
   const handleDrag = useCallback((event: MarkerDragEvent) => {

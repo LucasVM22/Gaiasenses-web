@@ -20,6 +20,7 @@ import { cookies } from "next/headers";
 import DataSender from "@/components/dataSender";
 import { Suspense } from "react";
 import { Pd4WebInstanceProvider } from "./pd4web-instance-context";
+import { getCompositionForClima } from "./use-composition-queue";
 
 function stringToBoolean(value: string | undefined): boolean {
   if (value === undefined) {
@@ -43,22 +44,7 @@ function stringToBoolean(value: string | undefined): boolean {
 const compositionOptions = Object.entries(CompositionsInfo).map(
   (item) => item[0],
 );
-// const compositionOptions = [
-//   "zigzag",
-//   "stormEye",
-//   "curves",
-//   "digitalOrganism",
-//   "mudflatScatter",
-//   "cloudBubble",
-//   "paintBrush",
-//   "generativeStrings",
-//   "nightRain",
-//   "windLines",
-//   "lightningBolts",
-//   "burningTrees",
-//   "riverLines",
-//   "attractor"
-// ]
+
 const DEFAULT_COMPOSITION = "attractor";
 
 type PageProps = {
@@ -75,35 +61,8 @@ type PageProps = {
 export default async function Page({ params, searchParams }: PageProps) {
   const t = await getTranslations("Index");
 
-  let composition = "";
-  if (
-    searchParams.composition &&
-    compositionOptions.includes(searchParams.composition)
-  ) {
-    composition = searchParams.composition;
-  } else {
-    composition = DEFAULT_COMPOSITION;
-  }
-
   const lat = parseFloat(searchParams.lat ?? "0");
   const lng = parseFloat(searchParams.lng ?? "0");
-
-  const newQuery = {
-    ...searchParams,
-    composition: composition,
-    mode: "player",
-    play: true,
-  };
-
-  const compositionComponent =
-    searchParams.mode === "player"
-      ? CompositionsInfo[composition as keyof CompositionsInfoType].Component({
-          lat: lat.toString(),
-          lon: lng.toString(),
-          today: true,
-          play: true,
-        })
-      : null;
   const isInfoOpen = stringToBoolean(searchParams.info);
 
   let userLocation = { lat: 0, lng: 0 };
@@ -160,6 +119,41 @@ export default async function Page({ params, searchParams }: PageProps) {
   const humidity = weatherData.main.humidity;
   const lightningcount = lightningData?.count || 0;
   const firecount = fireSpotsData?.count || 0;
+  const clima = {
+    windSpeed: speed,
+    humidity,
+    clouds: weatherData.clouds,
+    temperature: temp,
+    lightnings: lightningcount,
+    fireSpots: firecount,
+  };
+
+  const requestedComposition = searchParams.composition;
+  const hasRequestedComposition =
+    typeof requestedComposition === "string" &&
+    compositionOptions.includes(requestedComposition);
+  const suggestedComposition =
+    getCompositionForClima(clima)[0] ?? DEFAULT_COMPOSITION;
+  const composition: string = hasRequestedComposition
+    ? requestedComposition
+    : suggestedComposition;
+
+  const newQuery = {
+    ...searchParams,
+    composition,
+    mode: "player",
+    play: true,
+  };
+
+  const compositionComponent =
+    searchParams.mode === "player"
+      ? CompositionsInfo[composition as keyof CompositionsInfoType].Component({
+          lat: lat.toString(),
+          lon: lng.toString(),
+          today: true,
+          play: true,
+        })
+      : null;
   //const pressure = weatherData.main.pressure;
   //const pressure_grnd_level = weatherData.main.grnd_level;
   //const visibility = weatherData.visibility;
@@ -180,14 +174,7 @@ export default async function Page({ params, searchParams }: PageProps) {
             mode={searchParams.mode === "player" ? "player" : "map"}
             composition={composition}
             InfoButtonText={t("infoButtonText")}
-            clima={{
-              windSpeed: speed,
-              humidity,
-              clouds: weatherData.clouds,
-              temperature: temp,
-              lightnings: lightningcount,
-              fireSpots: firecount,
-            }}
+            clima={clima}
           >
             <Suspense
               fallback={
@@ -204,7 +191,7 @@ export default async function Page({ params, searchParams }: PageProps) {
                     </Button>
                   </Link>
                   <CompositionDropdown
-                    searchParams={searchParams}
+                    searchParams={{ ...searchParams, composition }}
                   ></CompositionDropdown>
                 </div>
               </PopupContent>

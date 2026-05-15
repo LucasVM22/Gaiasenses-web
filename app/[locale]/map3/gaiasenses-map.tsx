@@ -15,6 +15,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { espCo2Response, espResponse } from "./ble-control";
 import type { Map3Pd4WebMoment } from "./pd4web-patches";
@@ -26,7 +27,6 @@ import AutoMove from "./auto-move";
 import CoordinateDisplay from "./coordinate-display";
 import MotionTuningPanel from "./motion-tuning-panel";
 import Pd4WebAudio from "./pd4web-audio";
-import { useCompositionQueue } from "./use-composition-queue";
 import { useMapInteractions } from "./use-map-interactions";
 import { useAutoMode } from "./use-auto-mode";
 import { useBLESensor } from "./use-ble-sensor";
@@ -35,7 +35,10 @@ import {
   DEFAULT_MOTION_TUNING_SETTINGS,
   type MotionTuningSettings,
 } from "./use-sensor-smoothing";
-import { ClimaData } from "./use-composition-queue";
+import {
+  ClimaData,
+  getCompositionDecisionTrace,
+} from "./use-composition-queue";
 import {
   DEFAULT_CO2_LEVEL_THRESHOLD,
   enabledCompositionKeys,
@@ -73,6 +76,9 @@ export default function GaiasensesMap({
   const isMapInputActive = mode === "map";
 
   const mapRef = useRef<MapRef>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const latestSensorDataRef = useRef<espResponse | null>(null);
   const latestCo2DataRef = useRef<espCo2Response | null>(null);
   const [motionTuning, setMotionTuning] = useState<MotionTuningSettings>(
@@ -120,7 +126,40 @@ export default function GaiasensesMap({
     window.localStorage.setItem(CO2_THRESHOLD_STORAGE_KEY, `${co2Threshold}`);
   }, [co2Threshold]);
 
-  const { getNextComposition } = useCompositionQueue(clima);
+  useEffect(() => {
+    if (!composition) {
+      return;
+    }
+
+    const modeParam = searchParams.get("mode") ?? "map";
+    const currentComposition = searchParams.get("composition");
+    const hasPlayParam = searchParams.has("play");
+
+    const shouldSyncComposition = currentComposition !== composition;
+    const shouldCleanPlay = modeParam === "map" && hasPlayParam;
+
+    if (!shouldSyncComposition && !shouldCleanPlay) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.set("composition", composition);
+    if (modeParam === "map") {
+      nextSearchParams.delete("play");
+    }
+    router.replace(`${pathname}?${nextSearchParams.toString()}`);
+  }, [composition, pathname, router, searchParams]);
+
+  useEffect(() => {
+    const trace = getCompositionDecisionTrace(clima);
+
+    //checar no terminal:
+    console.log("————————————————————————————————————————————————————");
+    console.log("Scores:", trace.scores);
+    console.log("Categoria escolhida:", trace.categoria);
+    console.log("Composição escolhida:", trace.escolha);
+    console.log("————————————————————————————————————————————————————");
+  }, [clima]);
 
   const {
     latlng,
@@ -132,7 +171,7 @@ export default function GaiasensesMap({
     handleMoveEnd,
     onGeolocate,
     handleMouseMove,
-  } = useMapInteractions({ initialLat, initialLng, getNextComposition });
+  } = useMapInteractions({ initialLat, initialLng });
 
   const {
     autoActive,
@@ -152,11 +191,11 @@ export default function GaiasensesMap({
   } = useBLESensor({
     mapRef,
     inputModeRef,
-    getNextComposition,
     initialLat,
     initialLng,
     motionTuning,
     co2LevelThreshold: co2Threshold,
+    currentComposition: composition ?? "attractor",
   });
 
   const {

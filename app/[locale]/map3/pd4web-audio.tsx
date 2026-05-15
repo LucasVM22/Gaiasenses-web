@@ -8,6 +8,8 @@ import type { Map3Pd4WebMoment } from "./pd4web-patches";
 import { resolveMap3Pd4WebPatch } from "./pd4web-patches";
 import { usePd4WebInstance } from "./pd4web-instance-context";
 
+const DEBUG = false;
+
 type Pd4WebModuleOptions = {
   wasmBinary: ArrayBuffer;
   locateFile?: (path: string, prefix?: string) => string;
@@ -53,7 +55,9 @@ type PdSendLogEntry = {
 };
 
 function logPd4Web(event: string, details?: Record<string, unknown>) {
-  console.log("[map3/pd4web]", event, details ?? {});
+  if (DEBUG) {
+    console.log("[map3/pd4web]", event, details ?? {});
+  }
 }
 
 function appendScriptOnce(id: string, src: string): Promise<HTMLScriptElement> {

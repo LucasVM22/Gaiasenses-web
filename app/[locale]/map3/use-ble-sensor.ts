@@ -11,21 +11,21 @@ import type { espCo2Response } from "./ble-control";
 type UseBLESensorOptions = {
   mapRef: React.RefObject<MapRef>;
   inputModeRef: React.MutableRefObject<string>;
-  getNextComposition: () => [string, any];
   initialLat: number;
   initialLng: number;
   motionTuning: MotionTuningSettings;
   co2LevelThreshold: number;
+  currentComposition: string;
 };
 
 export function useBLESensor({
   mapRef,
   inputModeRef,
-  getNextComposition,
   initialLat,
   initialLng,
   motionTuning,
   co2LevelThreshold,
+  currentComposition,
 }: UseBLESensorOptions) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -53,23 +53,16 @@ export function useBLESensor({
     ) {
       const center = mapRef.current?.getCenter().wrap();
       if (center) {
-        const composition = getNextComposition();
         const newSearchParams = new URLSearchParams(searchParams.toString());
         newSearchParams.set("lat", center.lat.toString());
         newSearchParams.set("lng", center.lng.toString());
         newSearchParams.set("mode", "map");
-        newSearchParams.set("composition", composition[0]);
+        newSearchParams.delete("composition");
+        newSearchParams.delete("play");
         router.replace(`${pathname}?${newSearchParams.toString()}`);
       }
     }
-  }, [
-    searchParams,
-    inputModeRef,
-    mapRef,
-    getNextComposition,
-    pathname,
-    router,
-  ]);
+  }, [searchParams, inputModeRef, mapRef, pathname, router]);
 
   const { handleOnSensor, resetCalibration, diagnostics } = useSensorSmoothing(
     mapRef,
@@ -97,7 +90,7 @@ export function useBLESensor({
     (data: espCo2Response) => {
       if (!isCompositionPlayingRef.current) {
         if (data.co2.ppm > co2LevelThreshold) {
-          const composition = getNextComposition();
+          const targetComposition = currentComposition || "attractor";
           const newSearchParams = new URLSearchParams(searchParams.toString());
           newSearchParams.set(
             "lat",
@@ -107,7 +100,7 @@ export function useBLESensor({
             "lng",
             mapRef.current?.getCenter().lng.toString() ?? initialLng.toString(),
           );
-          newSearchParams.set("composition", composition[0]);
+          newSearchParams.set("composition", targetComposition);
           newSearchParams.set("mode", "player");
           newSearchParams.set("play", "true");
           router.replace(`${pathname}?${newSearchParams.toString()}`);
@@ -118,11 +111,9 @@ export function useBLESensor({
           const newSearchParams = new URLSearchParams(searchParams.toString());
           newSearchParams.set("lat", searchParams.get("lat") ?? "0");
           newSearchParams.set("lng", searchParams.get("lng") ?? "0");
-          newSearchParams.set(
-            "composition",
-            searchParams.get("composition") ?? "windLines",
-          );
           newSearchParams.set("mode", "map");
+          newSearchParams.delete("composition");
+          newSearchParams.delete("play");
           router.replace(`${pathname}?${newSearchParams.toString()}`);
           // Do NOT set isCompositionPlayingRef.current = false here.
           // The lock is released by the useEffect above once searchParams
@@ -133,12 +124,12 @@ export function useBLESensor({
     [
       searchParams,
       mapRef,
-      getNextComposition,
       initialLat,
       initialLng,
       pathname,
       router,
       co2LevelThreshold,
+      currentComposition,
     ],
   );
 
