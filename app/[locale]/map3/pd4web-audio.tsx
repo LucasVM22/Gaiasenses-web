@@ -45,6 +45,13 @@ type Pd4WebAudioProps = {
   accZ?: number | null;
 };
 
+type PdSendLogEntry = {
+  id: number;
+  at: string;
+  receiver: string;
+  value: number;
+};
+
 function logPd4Web(event: string, details?: Record<string, unknown>) {
   console.log("[map3/pd4web]", event, details ?? {});
 }
@@ -145,7 +152,20 @@ function getPd4WebPausedByModeRegistry(): Record<string, boolean> {
 
 function isPd4WebPlaying(): boolean {
   const switchContainer = document.getElementById("Pd4WebAudioSwitch");
-  return switchContainer?.classList.contains("pulse-icon") ?? false;
+  if (!switchContainer) {
+    return false;
+  }
+
+  const audioContextState = window.Pd4WebAudioContext?.state;
+  if (audioContextState === "running") {
+    return true;
+  }
+  if (audioContextState === "suspended") {
+    return false;
+  }
+
+  // Pd4Web adds pulse-icon when waiting for user gesture (audio OFF).
+  return !switchContainer.classList.contains("pulse-icon");
 }
 
 function clickPd4WebSwitch(): boolean {
@@ -222,8 +242,38 @@ export default function Pd4WebAudio({
   const lastPatchIdRef = useRef<string | null>(null);
   const isAudioPlayingRef = useRef(false);
   const pausedByInactiveModeRef = useRef(false);
+  const sendLogIdRef = useRef(0);
   const [progress, setProgress] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isAudioOn, setIsAudioOn] = useState(false);
+  const [pollMsControl, setPollMsControl] = useState(100);
+  const [epsilonControl, setEpsilonControl] = useState(0.0001);
+  const [accEpsilonControl, setAccEpsilonControl] = useState(0.05);
+  const [sendLog, setSendLog] = useState<PdSendLogEntry[]>([]);
+
+  const appendSendLog = (receiver: string, value: number) => {
+    sendLogIdRef.current += 1;
+    const nextEntry: PdSendLogEntry = {
+      id: sendLogIdRef.current,
+      at: new Date().toLocaleTimeString("en-GB", { hour12: false }),
+      receiver,
+      value,
+    };
+
+    setSendLog((prev) => [nextEntry, ...prev].slice(0, 40));
+  };
+
+  useEffect(() => {
+    if (!patch || patch.binding.type !== "map-center") {
+      return;
+    }
+
+    setPollMsControl(patch.binding.pollMs ?? 100);
+    setEpsilonControl(patch.binding.epsilon ?? 0.0001);
+    setAccEpsilonControl(patch.binding.accEpsilon ?? 0.05);
+    setSendLog([]);
+    sendLogIdRef.current = 0;
+  }, [patch]);
 
   useEffect(() => {
     logPd4Web("render-state", {
@@ -272,6 +322,7 @@ export default function Pd4WebAudio({
       pdRef.current = null;
       setPdInstance(null);
       isAudioPlayingRef.current = false;
+      setIsAudioOn(false);
       pausedByInactiveModeRef.current = false;
       setProgress(0);
       setIsLoaded(false);
@@ -371,6 +422,7 @@ export default function Pd4WebAudio({
         pdRef.current = pd;
         setPdInstance(pd);
         isAudioPlayingRef.current = isPd4WebPlaying();
+        setIsAudioOn(isAudioPlayingRef.current);
         logPd4Web("instance-attached", {
           patchId: patch.id,
           nativeSwitchPlaying: isAudioPlayingRef.current,
@@ -394,6 +446,7 @@ export default function Pd4WebAudio({
           pausedByModeRegistry[patch.id] = false;
           pausedByInactiveModeRef.current = false;
           isAudioPlayingRef.current = isPd4WebPlaying();
+          setIsAudioOn(isAudioPlayingRef.current);
         }
 
         setProgress(100);
@@ -413,6 +466,7 @@ export default function Pd4WebAudio({
       });
       pdRef.current = null;
       setPdInstance(null);
+      setIsAudioOn(false);
       setIsLoaded(false);
     };
   }, [patch, setPdInstance]);
@@ -429,6 +483,7 @@ export default function Pd4WebAudio({
 
     const syncPlayingState = () => {
       isAudioPlayingRef.current = isPd4WebPlaying();
+      setIsAudioOn(isAudioPlayingRef.current);
       logPd4Web("native-switch-state", {
         patchId: patch?.id ?? null,
         active,
@@ -528,9 +583,9 @@ export default function Pd4WebAudio({
       return;
     }
 
-    const pollMs = binding.pollMs ?? 100;
-    const epsilon = binding.epsilon ?? 0.0001;
-    const accEpsilon = binding.accEpsilon ?? 0.05;
+    const pollMs = Math.max(16, Math.round(pollMsControl));
+    const epsilon = Math.max(0, epsilonControl);
+    const accEpsilon = Math.max(0, accEpsilonControl);
     let prevLat: number | null = null;
     let prevLng: number | null = null;
     let prevAccX: number | null = null;
@@ -560,41 +615,54 @@ export default function Pd4WebAudio({
       prevLng = lng;
 
       if (binding.latitudeReceiver) {
-        console.log("Sending Lat to Pd4Web:", lat);
         pd.sendFloat(binding.latitudeReceiver, lat);
+        appendSendLog(binding.latitudeReceiver, lat);
       }
       if (binding.longitudeReceiver) {
         pd.sendFloat(binding.longitudeReceiver, lng);
+        appendSendLog(binding.longitudeReceiver, lng);
       }
 
-      console.log("Received acc from props:", { accX, accY, accZ });
-      if (!accX || !accY || !accZ) {
-        return;
-      }
-
-      if (prevAccX !== null && Math.abs(accX - prevAccX) < accEpsilon) {
-        return;
-      }
-      if (prevAccY !== null && Math.abs(accY - prevAccY) < accEpsilon) {
-        return;
-      }
-      if (prevAccZ !== null && Math.abs(accZ - prevAccZ) < accEpsilon) {
+      if (
+        accX === null ||
+        accX === undefined ||
+        accY === null ||
+        accY === undefined ||
+        accZ === null ||
+        accZ === undefined
+      ) {
         return;
       }
 
-      prevAccX = accX;
-      prevAccY = accY;
-      prevAccZ = accZ;
+      const nextAccX = accX;
+      const nextAccY = accY;
+      const nextAccZ = accZ;
+
+      if (prevAccX !== null && Math.abs(nextAccX - prevAccX) < accEpsilon) {
+        return;
+      }
+      if (prevAccY !== null && Math.abs(nextAccY - prevAccY) < accEpsilon) {
+        return;
+      }
+      if (prevAccZ !== null && Math.abs(nextAccZ - prevAccZ) < accEpsilon) {
+        return;
+      }
+
+      prevAccX = nextAccX;
+      prevAccY = nextAccY;
+      prevAccZ = nextAccZ;
 
       if (binding.accXReceiver) {
-        console.log("Sending accX to Pd4Web:", prevAccX);
         pd.sendFloat(binding.accXReceiver, prevAccX);
+        appendSendLog(binding.accXReceiver, prevAccX);
       }
       if (binding.accYReceiver) {
         pd.sendFloat(binding.accYReceiver, prevAccY);
+        appendSendLog(binding.accYReceiver, prevAccY);
       }
       if (binding.accZReceiver) {
         pd.sendFloat(binding.accZReceiver, prevAccZ);
+        appendSendLog(binding.accZReceiver, prevAccZ);
       }
     }, pollMs);
 
@@ -610,9 +678,23 @@ export default function Pd4WebAudio({
       });
       window.clearInterval(intervalId);
     };
-  }, [accX, accY, accZ, active, isLoaded, mapInputActive, mapRef, patch]);
+  }, [
+    accEpsilonControl,
+    accX,
+    accY,
+    accZ,
+    active,
+    epsilonControl,
+    isLoaded,
+    mapInputActive,
+    mapRef,
+    patch,
+    pollMsControl,
+  ]);
 
   const showMapAudioUi = Boolean(patch) && moment === "map";
+  const showPd4WebDebugUi =
+    Boolean(patch) && isAudioOn && patch?.binding.type === "map-center";
 
   return (
     <>
@@ -629,6 +711,137 @@ export default function Pd4WebAudio({
             Downloading WASM... {progress}%
           </div>
           <progress className="mt-1 h-2 w-full" value={progress} max={100} />
+        </div>
+      )}
+
+      {showPd4WebDebugUi && (
+        <div className="absolute bottom-16 left-4 z-20 w-[min(320px,calc(100vw-2rem))] rounded-lg bg-black/80 p-3 text-xs text-white shadow-lg backdrop-blur-sm">
+          <div className="mb-2 font-semibold">Pd4Web live tuning</div>
+          <div className="mb-3 grid grid-cols-[1fr_auto] items-center gap-2">
+            <div className="flex items-center gap-1">
+              <label htmlFor="pd4web-poll-ms">pollMs</label>
+              <span
+                tabIndex={0}
+                className="group relative inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/40 text-[10px] font-semibold text-white/90"
+                aria-label="Help for pollMs"
+              >
+                ?
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-60 rounded-md bg-slate-900 px-2 py-1 text-[11px] leading-4 text-white shadow-lg group-hover:block group-focus:block"
+                >
+                  How often map and sensor values are sent to the patch
+                  (milliseconds). Lower is more responsive but costs more CPU;
+                  higher sends fewer updates and is lighter.
+                </span>
+              </span>
+            </div>
+            <input
+              id="pd4web-poll-ms"
+              type="number"
+              min={16}
+              step={1}
+              value={pollMsControl}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isFinite(next)) {
+                  setPollMsControl(Math.max(16, Math.round(next)));
+                }
+              }}
+              className="w-24 rounded border border-white/30 bg-white/10 px-2 py-1 text-right text-white"
+            />
+
+            <div className="flex items-center gap-1">
+              <label htmlFor="pd4web-epsilon">epsilon</label>
+              <span
+                tabIndex={0}
+                className="group relative inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/40 text-[10px] font-semibold text-white/90"
+                aria-label="Help for epsilon"
+              >
+                ?
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-60 rounded-md bg-slate-900 px-2 py-1 text-[11px] leading-4 text-white shadow-lg group-hover:block group-focus:block"
+                >
+                  Minimum latitude or longitude change before sending a new map
+                  value. Lower is more sensitive to small movement; higher
+                  filters small motion and noise.
+                </span>
+              </span>
+            </div>
+            <input
+              id="pd4web-epsilon"
+              type="number"
+              min={0}
+              step={0.0001}
+              value={epsilonControl}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isFinite(next)) {
+                  setEpsilonControl(Math.max(0, next));
+                }
+              }}
+              className="w-24 rounded border border-white/30 bg-white/10 px-2 py-1 text-right text-white"
+            />
+
+            <div className="flex items-center gap-1">
+              <label htmlFor="pd4web-acc-epsilon">accEpsilon</label>
+              <span
+                tabIndex={0}
+                className="group relative inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/40 text-[10px] font-semibold text-white/90"
+                aria-label="Help for accEpsilon"
+              >
+                ?
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-60 rounded-md bg-slate-900 px-2 py-1 text-[11px] leading-4 text-white shadow-lg group-hover:block group-focus:block"
+                >
+                  Minimum accelerometer change required before sending accX,
+                  accY, and accZ. Lower is more reactive but noisier; higher is
+                  steadier and filters jitter.
+                </span>
+              </span>
+            </div>
+            <input
+              id="pd4web-acc-epsilon"
+              type="number"
+              min={0}
+              step={0.01}
+              value={accEpsilonControl}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isFinite(next)) {
+                  setAccEpsilonControl(Math.max(0, next));
+                }
+              }}
+              className="w-24 rounded border border-white/30 bg-white/10 px-2 py-1 text-right text-white"
+            />
+          </div>
+
+          <div className="mb-1 flex items-center justify-between">
+            <span className="font-semibold">Sent to webpatch</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSendLog([]);
+              }}
+              className="rounded border border-white/30 px-2 py-0.5 text-[11px] hover:bg-white/10"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="max-h-36 overflow-y-auto rounded border border-white/20 bg-black/20 p-2 font-mono text-[11px] leading-4">
+            {sendLog.length === 0 ? (
+              <div className="text-white/60">No values sent yet.</div>
+            ) : (
+              sendLog.map((entry) => (
+                <div key={entry.id}>
+                  [{entry.at}] {entry.receiver}: {entry.value.toFixed(4)}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </>
