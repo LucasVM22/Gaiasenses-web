@@ -254,6 +254,7 @@ export default function Pd4WebAudio({
   const [pollMsControl, setPollMsControl] = useState(100);
   const [epsilonControl, setEpsilonControl] = useState(0.0001);
   const [accEpsilonControl, setAccEpsilonControl] = useState(0.05);
+  const [alwaysSendControl, setAlwaysSendControl] = useState(false);
   const [sendLog, setSendLog] = useState<PdSendLogEntry[]>([]);
 
   const appendSendLog = (receiver: string, value: number) => {
@@ -276,6 +277,7 @@ export default function Pd4WebAudio({
     setPollMsControl(patch.binding.pollMs ?? 100);
     setEpsilonControl(patch.binding.epsilon ?? 0.0001);
     setAccEpsilonControl(patch.binding.accEpsilon ?? 0.05);
+    setAlwaysSendControl(false);
     setSendLog([]);
     sendLogIdRef.current = 0;
   }, [patch]);
@@ -609,11 +611,13 @@ export default function Pd4WebAudio({
       const lat = center.lat;
       const lng = center.lng;
 
-      if (prevLat !== null && Math.abs(lat - prevLat) < epsilon) {
-        return;
-      }
-      if (prevLng !== null && Math.abs(lng - prevLng) < epsilon) {
-        return;
+      if (!alwaysSendControl) {
+        if (prevLat !== null && Math.abs(lat - prevLat) < epsilon) {
+          return;
+        }
+        if (prevLng !== null && Math.abs(lng - prevLng) < epsilon) {
+          return;
+        }
       }
 
       prevLat = lat;
@@ -643,14 +647,16 @@ export default function Pd4WebAudio({
       const nextAccY = accY;
       const nextAccZ = accZ;
 
-      if (prevAccX !== null && Math.abs(nextAccX - prevAccX) < accEpsilon) {
-        return;
-      }
-      if (prevAccY !== null && Math.abs(nextAccY - prevAccY) < accEpsilon) {
-        return;
-      }
-      if (prevAccZ !== null && Math.abs(nextAccZ - prevAccZ) < accEpsilon) {
-        return;
+      if (!alwaysSendControl) {
+        if (prevAccX !== null && Math.abs(nextAccX - prevAccX) < accEpsilon) {
+          return;
+        }
+        if (prevAccY !== null && Math.abs(nextAccY - prevAccY) < accEpsilon) {
+          return;
+        }
+        if (prevAccZ !== null && Math.abs(nextAccZ - prevAccZ) < accEpsilon) {
+          return;
+        }
       }
 
       prevAccX = nextAccX;
@@ -675,6 +681,7 @@ export default function Pd4WebAudio({
       patchId: patch.id,
       pollMs,
       epsilon,
+      alwaysSendControl,
     });
 
     return () => {
@@ -695,6 +702,7 @@ export default function Pd4WebAudio({
     mapRef,
     patch,
     pollMsControl,
+    alwaysSendControl,
   ]);
 
   const showMapAudioUi = Boolean(patch) && moment === "map";
@@ -844,6 +852,39 @@ export default function Pd4WebAudio({
               }}
               className="w-24 rounded border border-white/30 bg-white/10 px-2 py-1 text-right text-white"
             />
+
+            <div className="flex items-center gap-1">
+              <label htmlFor="pd4web-always-send">always send</label>
+              <span
+                tabIndex={0}
+                className="group relative inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/40 text-[10px] font-semibold text-white/90"
+                aria-label="Help for always send"
+              >
+                ?
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-60 rounded-md bg-slate-900 px-2 py-1 text-[11px] leading-4 text-white shadow-lg group-hover:block group-focus:block"
+                >
+                  Sends lat, lng, accX, accY, and accZ on every polling tick,
+                  ignoring epsilon thresholds and previous-value comparisons.
+                </span>
+              </span>
+            </div>
+            <label
+              htmlFor="pd4web-always-send"
+              className="flex items-center justify-end gap-2"
+            >
+              <input
+                id="pd4web-always-send"
+                type="checkbox"
+                checked={alwaysSendControl}
+                onChange={(event) => {
+                  setAlwaysSendControl(event.target.checked);
+                }}
+                className="h-4 w-4 rounded border border-white/40 bg-white/10"
+              />
+              <span>{alwaysSendControl ? "ON" : "OFF"}</span>
+            </label>
           </div>
 
           <div className="mb-1 flex items-center justify-between">

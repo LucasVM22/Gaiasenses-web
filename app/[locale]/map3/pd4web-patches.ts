@@ -191,9 +191,9 @@ export const MAP3_PD4WEB_PATCHES: readonly Map3Pd4WebPatch[] = [
   //     epsilon: DEFAULT_POSITION_EPSILON,
   //   },
   {
-    id: "paraiso30",
-    label: "Map sound 30",
-    bundleFolder: "paraiso30",
+    id: "paraiso32",
+    label: "Map sound 32",
+    bundleFolder: "paraiso32",
     activation: {
       // Keep this patch addressable in player mode too. Gating pause/resume is
       // handled in GaiasensesMap via the composition's `pd4web` flag.
