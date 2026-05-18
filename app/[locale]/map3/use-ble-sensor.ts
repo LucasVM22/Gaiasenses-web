@@ -90,7 +90,10 @@ export function useBLESensor({
     (data: espCo2Response) => {
       if (!isCompositionPlayingRef.current) {
         if (data.co2.ppm > co2LevelThreshold) {
-          const targetComposition = currentComposition || "attractor";
+          const targetComposition =
+            searchParams.get("composition") ??
+            currentComposition ??
+            "attractor";
           const newSearchParams = new URLSearchParams(searchParams.toString());
           newSearchParams.set(
             "lat",

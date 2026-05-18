@@ -31,7 +31,7 @@ export default function LocaleLayout({
   const msg = useMessages();
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={`${montserrat.className}`}>
+      <body className={`${montserrat.className}`} id="the-container">
         {/* <ThemeProvider
           attribute="class"
           defaultTheme="light"

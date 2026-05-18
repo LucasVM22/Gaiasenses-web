@@ -25,6 +25,13 @@ function clearSharedFadeInterval() {
   }
 }
 
+function stopAndResetSharedAudio() {
+  const audio = getSharedAudio();
+  audio.pause();
+  audio.currentTime = 0;
+  audio.volume = 1;
+}
+
 function fadeOutSharedAudio(durationMs: number) {
   const audio = getSharedAudio();
   const token = ++sharedFadeToken;
@@ -32,8 +39,7 @@ function fadeOutSharedAudio(durationMs: number) {
 
   const safeDurationMs = Math.max(0, durationMs);
   if (safeDurationMs === 0 || audio.paused) {
-    audio.pause();
-    audio.volume = 1;
+    stopAndResetSharedAudio();
     return;
   }
 
@@ -53,8 +59,7 @@ function fadeOutSharedAudio(durationMs: number) {
 
     if (nextVolume <= 0.001) {
       clearSharedFadeInterval();
-      audio.pause();
-      audio.volume = 1;
+      stopAndResetSharedAudio();
     }
   }, intervalMs);
 }
@@ -93,8 +98,9 @@ export default function Player({
       const requestedPath = new URL(path, window.location.origin).toString();
       if (audio.src !== requestedPath) {
         audio.src = requestedPath;
-        audio.currentTime = 0;
       }
+
+      audio.currentTime = 0;
 
       audio.loop = true;
       audio.volume = 1;
@@ -105,6 +111,7 @@ export default function Player({
     }
 
     if (sharedActiveOwnerId === ownerId) {
+      sharedActiveOwnerId = null;
       fadeOutSharedAudio(fadeOutMs);
     }
   }, [fadeOutMs, path, shouldPlay]);
@@ -138,6 +145,7 @@ export default function Player({
       audio.removeEventListener("pause", syncProgress);
 
       if (sharedActiveOwnerId === ownerId) {
+        sharedActiveOwnerId = null;
         fadeOutSharedAudio(fadeOutMs);
       }
     };

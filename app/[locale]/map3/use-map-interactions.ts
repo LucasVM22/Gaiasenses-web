@@ -28,6 +28,14 @@ export function useMapInteractions({
   const [isDataLoading, setIsDataLoading] = useState(false);
   const inputModeRef = useRef<string>("mouse");
 
+  const areCoordinatesClose = useCallback(
+    (aLat: number, aLng: number, bLat: number, bLng: number) => {
+      const EPSILON = 1e-6;
+      return Math.abs(aLat - bLat) < EPSILON && Math.abs(aLng - bLng) < EPSILON;
+    },
+    [],
+  );
+
   useEffect(() => {
     setShowPopup(true);
     setIsDataLoading(false);
@@ -39,6 +47,16 @@ export function useMapInteractions({
   const updatePopupPosition = useCallback(
     (lat: number, lng: number) => {
       if (showPopup) return;
+
+      // Fullscreen/resize can emit moveEnd without a meaningful center change.
+      // In that case keep the popup visible and avoid entering a loading state
+      // that depends on a server refresh that may never happen.
+      if (areCoordinatesClose(lat, lng, initialLat, initialLng)) {
+        setShowPopup(true);
+        setIsDataLoading(false);
+        return;
+      }
+
       const newSearchParams = new URLSearchParams(searchParams.toString());
       newSearchParams.set("lat", lat.toString());
       newSearchParams.set("lng", lng.toString());
@@ -51,7 +69,7 @@ export function useMapInteractions({
       setShowPopup(true);
       setIsDataLoading(true);
     },
-    [showPopup, searchParams, pathname, router],
+    [showPopup, areCoordinatesClose, searchParams, pathname, router],
   );
 
   const handleDrag = useCallback((event: MarkerDragEvent) => {
@@ -85,13 +103,20 @@ export function useMapInteractions({
       }
 
       const center = e.target.getCenter();
-      setLatlng([
-        parseFloat(center.lat.toString()),
-        parseFloat(center.lng.toString()),
-      ]);
-      if (showPopup) setShowPopup(false);
+      const centerLat = parseFloat(center.lat.toString());
+      const centerLng = parseFloat(center.lng.toString());
+      setLatlng([centerLat, centerLng]);
+
+      // Fullscreen enter/exit can emit move events from resize only.
+      // Keep the popup open unless the center actually changed.
+      if (
+        showPopup &&
+        !areCoordinatesClose(centerLat, centerLng, latlng[0], latlng[1])
+      ) {
+        setShowPopup(false);
+      }
     },
-    [showPopup],
+    [showPopup, latlng, areCoordinatesClose],
   );
 
   const handleMoveEnd = useCallback(

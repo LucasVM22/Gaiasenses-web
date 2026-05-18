@@ -270,7 +270,7 @@ export default function GaiasensesMap({
           if (autoActive) onMoveEndAuto(e);
         }}
       >
-        <FullscreenControl containerId="total-container" />
+        <FullscreenControl containerId="the-container" />
         <NavigationControl />
         <AutoMove
           isActive={autoActive}
@@ -295,12 +295,13 @@ export default function GaiasensesMap({
         <GeolocateControl onGeolocate={onGeolocate} />
         {showPopup && (
           <Popup
+            key="info-popup"
             latitude={latlng[0]}
             longitude={latlng[1]}
             anchor="bottom"
             offset={36}
             onClose={() => setShowPopup(false)}
-            closeOnClick={true}
+            closeOnClick={false}
             closeButton={false}
             maxWidth="40rem"
           >

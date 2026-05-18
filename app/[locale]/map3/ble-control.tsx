@@ -1,6 +1,6 @@
 "use client";
 import { Gamepad, Loader2 } from "lucide-react";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -81,38 +81,42 @@ export default function BLEControl({
   const deviceRef = useRef<BluetoothDevice | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalDisconnectRef = useRef(false);
+  const onSensorRef = useRef(onSensor);
+  const onCo2SensorRef = useRef(onCo2Sensor);
 
-  const handleCharacteristicValueChanged = useCallback(
-    (event: Event) => {
-      const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
-      const value = characteristic.value;
-      if (value) {
-        // Convert the DataView to a string or number depending on your needs
-        const decoder = new TextDecoder("utf-8");
-        const decodedData = decoder.decode(value);
-        const parsedData = JSON.parse(decodedData);
-        onSensor(parsedData);
-        setReceivedData(parsedData);
-      }
-    },
-    [onSensor],
-  );
+  useEffect(() => {
+    onSensorRef.current = onSensor;
+  }, [onSensor]);
 
-  const handleCo2CharacteristicValueChanged = useCallback(
-    (event: Event) => {
-      const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
-      const value = characteristic.value;
-      if (value) {
-        // Convert the DataView to a string or number depending on your needs
-        const decoder = new TextDecoder("utf-8");
-        const decodedData = decoder.decode(value);
-        const parsedData: espCo2Response = JSON.parse(decodedData);
-        onCo2Sensor(parsedData);
-        setCo2Value(parsedData.co2.ppm);
-      }
-    },
-    [onCo2Sensor, setCo2Value],
-  );
+  useEffect(() => {
+    onCo2SensorRef.current = onCo2Sensor;
+  }, [onCo2Sensor]);
+
+  const handleCharacteristicValueChanged = useCallback((event: Event) => {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const value = characteristic.value;
+    if (value) {
+      // Convert the DataView to a string or number depending on your needs
+      const decoder = new TextDecoder("utf-8");
+      const decodedData = decoder.decode(value);
+      const parsedData = JSON.parse(decodedData);
+      onSensorRef.current(parsedData);
+      setReceivedData(parsedData);
+    }
+  }, []);
+
+  const handleCo2CharacteristicValueChanged = useCallback((event: Event) => {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const value = characteristic.value;
+    if (value) {
+      // Convert the DataView to a string or number depending on your needs
+      const decoder = new TextDecoder("utf-8");
+      const decodedData = decoder.decode(value);
+      const parsedData: espCo2Response = JSON.parse(decodedData);
+      onCo2SensorRef.current(parsedData);
+      setCo2Value(parsedData.co2.ppm);
+    }
+  }, []);
 
   const setupGATT = useCallback(
     async (device: BluetoothDevice) => {
@@ -276,13 +280,13 @@ export default function BLEControl({
       const decoder = new TextDecoder("utf-8");
       const decodedData = decoder.decode(value);
       const parsedData = JSON.parse(decodedData);
-      onSensor(parsedData);
+      onSensorRef.current(parsedData);
       setReceivedData(parsedData);
     } catch (err) {
       console.error("Read Error:", err);
       setError(err instanceof Error ? err.message : "Failed to read value");
     }
-  }, [bleDevice.characteristic, onSensor]);
+  }, [bleDevice.characteristic]);
 
   const buttonTitle = isConnecting
     ? "Connecting…"
