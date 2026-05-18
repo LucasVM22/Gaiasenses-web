@@ -18,6 +18,7 @@ function sketch(p5: P5CanvasInstance<SketchProps & ColorFlowerSketchProps>) {
   let flowers: Flower[] = [];
   let w = p5.windowWidth;
   let h = p5.windowHeight;
+  let maxExtent = Math.max(w, h) * 0.73;
   let play = false;
   let temperature = 0;
 
@@ -169,7 +170,7 @@ function sketch(p5: P5CanvasInstance<SketchProps & ColorFlowerSketchProps>) {
     grow() {
       let frameMap = p5.map(p5.frameCount, this.n, this.n + 625, 0, 1);
       let sizer = easeInOutSine(frameMap);
-      this.extent = p5.map(sizer, 0, 1, 0, w * 0.73);
+      this.extent = p5.map(sizer, 0, 1, 0, maxExtent);
     }
 
     show() {
@@ -185,7 +186,8 @@ function sketch(p5: P5CanvasInstance<SketchProps & ColorFlowerSketchProps>) {
         let ff = p5.lerpColor(shader, f, shade);
         p5.fill(ff);
         p5.push();
-        p5.translate(p5.width / 2, p5.height / 2.2);
+
+        p5.translate(p5.width / 2, p5.height / 2);
         p5.rotate(i);
         let xamount = this.extent / this.nuOfPetals;
         let xoff = p5.map(
@@ -194,7 +196,7 @@ function sketch(p5: P5CanvasInstance<SketchProps & ColorFlowerSketchProps>) {
           -1,
           1,
           -xamount,
-          !!xamount
+          !!xamount,
         );
         let yoff = p5.map(
           1,
@@ -202,7 +204,7 @@ function sketch(p5: P5CanvasInstance<SketchProps & ColorFlowerSketchProps>) {
           -1,
           1,
           -xamount / 5,
-          !!(xamount / 5)
+          !!(xamount / 5),
         );
         p5.arc(
           xoff,
@@ -211,14 +213,14 @@ function sketch(p5: P5CanvasInstance<SketchProps & ColorFlowerSketchProps>) {
           this.extent,
           p5.PI / 2 - ps * 1.1,
           p5.PI / 2 + ps * 1.1,
-          p5.OPEN
+          p5.OPEN,
         );
         p5.pop();
       }
     }
 
     end() {
-      if (this.extent > w * 0.71) {
+      if (this.extent > maxExtent * 0.97) {
         let index = flowers.indexOf(this);
         flowers.splice(index, 1);
       }
@@ -243,7 +245,7 @@ export default function ColorFlowerSketch({
   // Prioriza valores da URL se existirem
   const temperatureValue = useMemo(
     () => (urlTemperature !== null ? Number(urlTemperature) : temperature),
-    [urlTemperature, temperature]
+    [urlTemperature, temperature],
   );
   const playValue =
     urlPlay !== null ? urlPlay === "true" || urlPlay === "1" : play;
