@@ -62,6 +62,15 @@ import { Button } from "@/components/ui/button";
 const MOTION_TUNING_STORAGE_KEY = "map3-motion-tuning-settings";
 const CO2_THRESHOLD_STORAGE_KEY = "map3-co2-threshold";
 const MAP_PATCH_LOG_MAX_ENTRIES = 250;
+
+/**
+ * The map-moment patch (paraisoGaia43) sonifies every gaia.lat/gaia.lon it
+ * receives, so dragging the globe triggers a sound. Setting this to false
+ * stops the app from sending map-centre movement into the patch at all —
+ * including the debug panel's "always send" toggle — which silences that
+ * sound without rebuilding the patch. Flip back to true to restore it.
+ */
+const SEND_MAP_MOVEMENT_TO_PATCH = false;
 const VALID_MOTION_MAPPING_METHODS: MotionMappingMethod[] = [
   "pd",
   "euler",
@@ -571,7 +580,8 @@ export default function GaiasensesMap({
       const latChanged = prevLat === null || Math.abs(lat - prevLat) >= epsilon;
       const lngChanged = prevLng === null || Math.abs(lng - prevLng) >= epsilon;
       const shouldSendMapMovement =
-        alwaysSendMovement || latChanged || lngChanged;
+        SEND_MAP_MOVEMENT_TO_PATCH &&
+        (alwaysSendMovement || latChanged || lngChanged);
 
       if (shouldSendMapMovement) {
         const latDelta = prevLat === null ? null : Math.abs(lat - prevLat);
